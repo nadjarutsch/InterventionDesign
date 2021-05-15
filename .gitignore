@@ -17,4 +17,4 @@ venv.bak/
 .spyproject
 
 # Misc
-__pycache__
+**.DS_Store
