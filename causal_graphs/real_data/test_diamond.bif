@@ -1,0 +1,32 @@
+/**
+ * Close to deterministic connections in a diamond-shaped graph (x1 -> [x2,x3] -> x4)
+ *
+ */
+
+network unknown {}
+
+variable x1   { type discrete [ 2 ] { c1, c2 }; }
+variable x2   { type discrete [ 2 ] { c1, c2 }; }
+variable x3   { type discrete [ 2 ] { c1, c2 }; }
+variable x4   { type discrete [ 2 ] { c1, c2 }; }
+
+probability ( x1 ) {
+  table 0.99, 0.01;
+}
+
+probability ( x2 | x1 ) {
+  (c1) 0.01, 0.99;
+  (c2) 0.99, 0.01;
+}
+
+probability ( x3 | x1 ) {
+  (c1) 0.01, 0.99;
+  (c2) 0.99, 0.01;
+}
+
+probability ( x4 | x2, x3 ) {
+  (c1, c1) 0.05, 0.95;
+  (c2, c1) 0.95, 0.05;
+  (c1, c2) 0.95, 0.05;
+  (c2, c2) 0.05, 0.95;
+}

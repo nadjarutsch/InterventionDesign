@@ -1,0 +1,47 @@
+/**
+ * Chain with close to deterministic connections
+ *
+ */
+
+network unknown {}
+
+variable x1   { type discrete [ 3 ] { c1, c2, c3 }; }
+variable x2   { type discrete [ 3 ] { c1, c2, c3 }; }
+variable x3   { type discrete [ 3 ] { c1, c2, c3 }; }
+variable x4   { type discrete [ 3 ] { c1, c2, c3 }; }
+variable x5   { type discrete [ 3 ] { c1, c2, c3 }; }
+variable x6   { type discrete [ 3 ] { c1, c2, c3 }; }
+
+probability ( x1 ) {
+  table 0.25, 0.25, 0.25;
+}
+
+probability ( x2 | x1 ) {
+  (c1) 0.90, 0.05, 0.05;
+  (c2) 0.05, 0.90, 0.05;
+  (c3) 0.05, 0.05, 0.90;
+}
+
+probability ( x3 | x2 ) {
+  (c1) 0.90, 0.05, 0.05;
+  (c2) 0.05, 0.90, 0.05;
+  (c3) 0.05, 0.05, 0.90;
+}
+
+probability ( x4 | x3 ) {
+  (c1) 0.90, 0.05, 0.05;
+  (c2) 0.05, 0.90, 0.05;
+  (c3) 0.05, 0.05, 0.90;
+}
+
+probability ( x5 | x4 ) {
+  (c1) 0.90, 0.05, 0.05;
+  (c2) 0.05, 0.90, 0.05;
+  (c3) 0.05, 0.05, 0.90;
+}
+
+probability ( x6 | x5 ) {
+  (c1) 0.90, 0.05, 0.05;
+  (c2) 0.05, 0.90, 0.05;
+  (c3) 0.05, 0.05, 0.90;
+}
