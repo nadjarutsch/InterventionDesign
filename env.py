@@ -1,55 +1,78 @@
 import gym
 from gym import spaces
 import numpy as np
+import torch
 
-# number of samples drawn from observational SCM
-N_OBS = 100
+from causal_graphs.graph_generation import generate_categorical_graph
+from causal_graphs.graph_visualization import visualize_graph
+from datasets import CategoricalData
 
-# number of samples drawn for one intervention
-N_SAMPLES = 10
+
 
 class CausalEnv(gym.Env):
-    """Environment based on a given Structural Causal Model (SCM)
+    """Environment based on a sampled Directed Acyclic Graph (DAG).
     
     Attributes:
-        scm: Structural Causal Model
+        num_vars: Number of variables of the sampled DAG.
+        max_categs: (Maximum) number of categories of each causal variable.
+        graph_structure: Structure of the sampled DAG.
     """
     metadata = {'render.modes': ['human']}
   
-    def __init__(self, scm):
-        super(CausalEnv, self).__init__()
-        # Define action and observation space
-        # They must be gym.spaces objects
+    def __init__(self, 
+                 num_vars: int, 
+                 max_categs: int,
+                 graph_structure: str = 'random'):
+        """Inits an instance of the environment with the given attributes."""
         
-        # Structural Causal Model
-        self.scm = scm
+        super(CausalEnv, self).__init__()
+        
+        # Sample an underlying DAG
+        # TODO: add graph_structure as parameter in generate_categorical_graph
+        self.dag = generate_categorical_graph(num_vars=num_vars,
+                                   min_categs=max_categs, # TODO: can this be changed?
+                                   max_categs=max_categs,
+                                   edge_prob=0.0,
+                                   connected=True,
+                                   seed=42)
         
         # One action is an intervention on one node (sparse interventions)
-        self.action_space = spaces.Discrete(len(list(self.scm.assignment)))
+        self.action_space = spaces.Discrete(num_vars)
              
         # Dummy observational space
-        # TODO: Implement observational space for learning a policy
+        # TODO: Implement observational space for learning a policy, e.g. 
+        # possible values (0-1) in adjacency matrix (box space)
         self.observation_space = spaces.Discrete(1)
         
     def step(self, action):
         
         # Perform intervention, sample from interventional SCM     
-        node_key = list(self.scm.assignment.keys())[action]
-        scm_do = self.scm.do(node_key)
-        # TODO: set values by sampling from the codomain (wait for implementation
-        # of codomain in scm.py) // sample with or without replacement?
-        samples = scm_do.sample(n_samples=N_SAMPLES, set_values={node_key : np.arange(N_SAMPLES)})
+#        var = self.dag.variables[action]
         
-        reward = -1 # incentivice agent to perform as few interventions as possible
-        info = {} # TODO: do I want to use this?
+        # Soft intervention => replace p(X_n) by random categorical
+#        int_dist = _random_categ(size=(var.prob_dist.num_categs,), scale=0.0, axis=-1)
+#        value = np.random.multinomial(n=1, pvals=int_dist, size=(N_SAMPLES,))
+#        value = np.argmax(value, axis=-1) # One-hot to index
+#		 value[:] = 0
+#        intervention_dict = {var.name: value}
         
-        return samples, reward, info
+        
+#        int_sample = self.dag.sample(interventions=intervention_dict, 
+#		                         batch_size=N_SAMPLES, 
+#		                         as_array=True)
+        
+#        int_sample = torch.from_numpy(int_sample)
+
+        
+#        reward = -1 # incentivice agent to perform as few interventions as possible
+#        info = {} # TODO: do I want to use this?
+        
+#        return int_sample, reward, info
+        pass
     
-    def reset(self):
-        # TODO: Extend when observational space is implemented
-        
-        obs_samples = self.scm.sample(n_samples=N_OBS) # TODO: implement in main?           
-        return obs_samples
+    def reset(self, n_samples: int) -> CategoricalData:
+        dataset = CategoricalData(self.dag, dataset_size=n_samples)  
+        return dataset
     
     def render(self, mode='human', close=False):
         # Render the environment to the screen
@@ -57,6 +80,3 @@ class CausalEnv(gym.Env):
     
     def close(self):
         pass
-    
-    
-
