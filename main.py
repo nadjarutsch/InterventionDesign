@@ -54,7 +54,7 @@ def main(args: argparse.Namespace):
     # causal discovery training loop
     for epoch in track(range(args.max_interventions), leave=False, desc="Epoch loop"):
         # fit model to observational data
-        fittingModule, loss = obs_step(args, fittingModule, gamma, theta, obs_dataloader)
+        fittingModule, loss = obs_step(args, fittingModule, updateModule.gamma, updateModule.theta, obs_dataloader)
         
         metric_before = eval_model() # TODO: needed?
         
@@ -64,7 +64,7 @@ def main(args: argparse.Namespace):
         int_dataloader = DataLoader(int_data, batch_size=args.int_batch_size, shuffle=True, drop_last=True)
         
         # TODO
-        updateModule = int_step(args, updateModule, model, int_idx, int_dataloader)
+        updateModule = int_step(args, updateModule, fittingModule.model, int_idx, int_dataloader)
         
         # TODO
         metric_after = eval_model()        
@@ -73,7 +73,8 @@ def main(args: argparse.Namespace):
 
 
 
-        
+   
+# TODO: maybe return fittingModule, updateModule instead of MLP, gamma, theta?    
 def init_model(args: argparse.Namespace) -> Tuple[MultivarMLP, nn.Parameter, nn.Parameter]:
     """Initializes a complete model of the causal structure, consisting of a 
     multivariable MLP which models the conditional distributions of the causal 
