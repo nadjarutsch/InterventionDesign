@@ -1,5 +1,7 @@
 from env import CausalEnv
 from heuristics import choose_intervention
+from graph_scoring import GraphScoring # TODO
+from graph_update import GraphUpdate # TODO
 
 import numpy as np
 import argparse
@@ -23,10 +25,12 @@ def main(args: argparse.Namespace):
             the causal structure and discovery process.
     """
     # initialize model of the causal structure
-    model, gamma, theta  = init_model(args)
+    model, gamma, theta = init_model(args)
     
     # initialize optimizers
     model_optimizer = torch.optim.Adam(model.parameters(), lr=args.lr_model, betas=args.betas_model)
+    gamma_optimizer = None # TODO
+    theta_optimizer = None # TODO
     
     # initialize the environment: create a graph and generate observational 
     # samples from the joint distribution of the graph
@@ -36,10 +40,16 @@ def main(args: argparse.Namespace):
     obs_data = env.reset(n_samples=args.n_obs_samples)
     obs_dataloader = DataLoader(obs_data, batch_size=args.obs_batch_size, shuffle=True, drop_last=True)
     
-    # initialize discovery modules
+    # initialize fitting module
     fittingModule = GraphFitting(model, 
                                  model_optimizer, 
                                  obs_dataloader)
+    
+    # TODO: implement updateModule as combined scoring & update module
+    updateModule = GraphUpdate(gamma,
+                               theta,
+                               gamma_optimizer,
+                               theta_optimizer)
     
     # causal discovery training loop
     for epoch in track(range(args.max_interventions), leave=False, desc="Epoch loop"):
@@ -48,19 +58,18 @@ def main(args: argparse.Namespace):
         
         metric_before = eval_model() # TODO: needed?
         
-        # TODO
         # perform intervention and update parameters based on interventional data
         int_idx = choose_intervention(heuristic=args.heuristic, gamma=gamma.detach(), theta=theta.detach())
-        int_data, reward, info = env.step(int_idx, args.n_int_samples)
+        int_data, reward, info = env.step(int_idx, args.n_int_samples) # TODO in env.py: provide data as torch.utils.data.Dataset
         int_dataloader = DataLoader(int_data, batch_size=args.int_batch_size, shuffle=True, drop_last=True)
         
-#        int_step(args, scoringModule, updateModule, gamma, theta, int_idx)
+        # TODO
+        updateModule = int_step(args, updateModule, model, int_idx, int_dataloader)
         
         # TODO
         metric_after = eval_model()        
         metric_diff = metric_before - metric_after
         metric_rel = metric_after / metric_before 
-
 
 
 
@@ -136,9 +145,19 @@ def obs_step(args: argparse.Namespace,
     
     return fittingModule, avg_loss
 
-# TODO
-def int_step(int_idx: int):
-    pass
+
+# TODO: combine GraphScoring and GraphUpdate into new updateModule?
+def int_step(args: argparse.Namespace,
+             updateModule: GraphUpdate,
+             model: MultivarMLP,
+             int_idx: int,
+             int_dataloader: DataLoader) -> GraphUpdate:
+
+    for _ in track(range(args.int_iters), leave=False, desc="Gamma update loop"):
+        updateModule.update(model, int_dataloader, int_idx) # TODO
+
+    return updateModule
+
     
 def sample_func(sample_matrix, theta, batch_size):
         A = sample_matrix[None].expand(batch_size, -1, -1)
