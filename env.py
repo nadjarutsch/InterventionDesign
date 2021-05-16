@@ -5,6 +5,7 @@ import torch
 
 from causal_graphs.graph_generation import generate_categorical_graph
 from causal_graphs.graph_visualization import visualize_graph
+from causal_graphs.variable_distributions import _random_categ
 from datasets import CategoricalData
 
 
@@ -44,31 +45,28 @@ class CausalEnv(gym.Env):
         # possible values (0-1) in adjacency matrix (box space)
         self.observation_space = spaces.Discrete(1)
         
-    def step(self, action):
+    def step(self, action_idx, num_samples):
         
         # Perform intervention, sample from interventional SCM     
-#        var = self.dag.variables[action]
+        var = self.dag.variables[action_idx]
         
-        # Soft intervention => replace p(X_n) by random categorical
-#        int_dist = _random_categ(size=(var.prob_dist.num_categs,), scale=0.0, axis=-1)
-#        value = np.random.multinomial(n=1, pvals=int_dist, size=(N_SAMPLES,))
-#        value = np.argmax(value, axis=-1) # One-hot to index
-#		 value[:] = 0
-#        intervention_dict = {var.name: value}
+        # Soft intervention => replace p(X_n) by uniform categorical
+        # TODO: I believe this is still called a (stochastic) hard intervention?
+        int_dist = _random_categ(size=(var.prob_dist.num_categs,), scale=0.0, axis=-1)
+        value = np.random.multinomial(n=1, pvals=int_dist, size=(num_samples,))
+        value = np.argmax(value, axis=-1) # One-hot to index
+        intervention_dict = {var.name: value}
         
-        
-#        int_sample = self.dag.sample(interventions=intervention_dict, 
-#		                         batch_size=N_SAMPLES, 
-#		                         as_array=True)
-        
-#        int_sample = torch.from_numpy(int_sample)
+        int_data = self.dag.sample(interventions=intervention_dict, 
+                                   batch_size=num_samples, 
+                                   as_array=True)        
+        int_data = torch.from_numpy(int_data)
 
         
-#        reward = -1 # incentivice agent to perform as few interventions as possible
-#        info = {} # TODO: do I want to use this?
+        reward = -1 # incentivice agent to perform as few interventions as possible
+        info = {} # TODO: do I want to use this?
         
-#        return int_sample, reward, info
-        pass
+        return int_data, reward, info
     
     def reset(self, n_samples: int) -> CategoricalData:
         dataset = CategoricalData(self.dag, dataset_size=n_samples)  

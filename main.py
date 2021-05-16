@@ -51,7 +51,10 @@ def main(args: argparse.Namespace):
         # TODO
         # perform intervention and update parameters based on interventional data
         int_idx = choose_intervention(heuristic=args.heuristic, gamma=gamma.detach(), theta=theta.detach())
-        int_step(int_idx)
+        int_data, reward, info = env.step(int_idx, args.n_int_samples)
+        int_dataloader = DataLoader(int_data, batch_size=args.int_batch_size, shuffle=True, drop_last=True)
+        
+#        int_step(args, scoringModule, updateModule, gamma, theta, int_idx)
         
         # TODO
         metric_after = eval_model()        
@@ -165,6 +168,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_variables', default=4, type=int, help='Number of causal variables')
     parser.add_argument('--num_categories', default=10, type=int, help='Maximum number of categories of a causal variable')
     parser.add_argument('--n_obs_samples', default=10000, type=int, help='Number of observational samples from the joint distribution of a synthetic graph')
+    parser.add_argument('--n_int_samples', default=1000, type=int, help='Number of samples from one intervention')
     parser.add_argument('--max_interventions', default=1, type=int, help='Maximum number of interventions')
     parser.add_argument('--graph_structure', choices=['random', 'jungle', 'chain'], default='random', help='Structure of the true causal graph')
     parser.add_argument('--heuristic', choices=['uniform', 'uncertain'], default='uncertain', help='Heuristic used for choosing intervention nodes')
@@ -174,6 +178,10 @@ if __name__ == '__main__':
     parser.add_argument('--betas_model', default=(0.9,0.999), type=tuple, help='Betas used for Adam optimizer')
     parser.add_argument('--obs_batch_size', default=128, type=int, help='Batch size used for fitting the graph to observational data')
     parser.add_argument('--fitting_epochs', default=10, type=int, help='Number of epochs for fitting the causal structure to observational data' )
+    
+    # Graph scoring
+    parser.add_argument('--int_batch_size', default=64, type=int, help='Batch size used for scoring based on interventional data')
+    
 
     args: argparse.Namespace = parser.parse_args()
 
