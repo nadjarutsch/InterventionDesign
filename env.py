@@ -60,7 +60,7 @@ class CausalEnv(gym.Env):
         int_data = self.dag.sample(interventions=intervention_dict, 
                                    batch_size=num_samples, 
                                    as_array=True)        
-        int_data = torch.from_numpy(int_data)
+        int_data = torch.from_numpy(int_data) # TODO: provide as torch.utils.data.Dataset
 
         
         reward = -1 # incentivice agent to perform as few interventions as possible
