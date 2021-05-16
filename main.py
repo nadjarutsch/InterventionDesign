@@ -50,8 +50,8 @@ def main(args: argparse.Namespace):
         
         # TODO
         # perform intervention and update parameters based on interventional data
-        int_idx = choose_intervention(heuristic=args.heuristic, gamma=gamma.detach())
-        int_step()
+        int_idx = choose_intervention(heuristic=args.heuristic, gamma=gamma.detach(), theta=theta.detach())
+        int_step(int_idx)
         
         # TODO
         metric_after = eval_model()        
@@ -133,6 +133,9 @@ def obs_step(args: argparse.Namespace,
     
     return fittingModule, avg_loss
 
+# TODO
+def int_step(int_idx: int):
+    pass
     
 def sample_func(sample_matrix, theta, batch_size):
         A = sample_matrix[None].expand(batch_size, -1, -1)
@@ -144,16 +147,10 @@ def sample_func(sample_matrix, theta, batch_size):
         A = A * order_mask
 
         return A 
-  
     
 # TODO
 def eval_model():
     return 1
-
-
-# TODO
-def int_step():
-    pass
 
 
     

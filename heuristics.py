@@ -4,7 +4,7 @@ import numpy as np
 HEURISTICS = ['uniform', 'uncertain']
 
 
-def choose_intervention(heuristic: str, gamma: torch.Tensor) -> int:
+def choose_intervention(heuristic: str, gamma: torch.Tensor, theta: torch.Tensor) -> int:
     """Chooses a node for intervention.
     
     Args:
@@ -21,7 +21,8 @@ def choose_intervention(heuristic: str, gamma: torch.Tensor) -> int:
         return uniform(gamma)
     
     elif heuristic == HEURISTICS[1]:
-        return uncertain(gamma)  
+        certainty_matrix = get_certainty_matrix(gamma.detach(), theta.detach())
+        return uncertain(certainty_matrix)  
     
     else:
         raise Exception('Heuristic is not available. \n Chosen heuristic: {} \n Available heuristics: {}'.format(heuristic, HEURISTICS))
@@ -33,11 +34,15 @@ def uniform(gamma: torch.Tensor) -> int:
     return np.random.randint(gamma.shape[-1])
 
 
-def uncertain(gamma: torch.Tensor) -> int:
+def uncertain(matrix: torch.Tensor) -> int:
     """Chooses the intervention node with the most uncertain outgoing edge."""
    
     # TODO: check if [0] really returns the node with the most uncertain 
     # outgoing edge
-    return np.unravel_index(np.argmin(torch.abs(gamma)), gamma.shape)[0]
-    
+    return np.unravel_index(np.argmin(torch.abs(matrix)), matrix.shape)[0]
 
+    
+def get_certainty_matrix(gamma, theta):
+    # TODO: check if this works as intended, maybe try abs(gamma) + abs(theta)?
+    A = gamma * theta
+    return A.cpu()
