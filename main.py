@@ -35,7 +35,8 @@ def main(args: argparse.Namespace):
     # initialize the environment: create a graph and generate observational 
     # samples from the joint distribution of the graph
     env = CausalEnv(num_vars=args.num_variables, 
-                    max_categs=args.num_categories,
+                    min_categs=args.min_categories,
+                    max_categs=args.max_categories,
                     graph_structure=args.graph_structure)
     obs_data = env.reset(n_samples=args.n_obs_samples)
     obs_dataloader = DataLoader(obs_data, batch_size=args.obs_batch_size, shuffle=True, drop_last=True)
@@ -186,7 +187,8 @@ if __name__ == '__main__':
     # Settings
     parser.add_argument('--data_parallel', default=False, type=bool, help='Use parallelization for efficiency')
     parser.add_argument('--num_variables', default=4, type=int, help='Number of causal variables')
-    parser.add_argument('--num_categories', default=10, type=int, help='Maximum number of categories of a causal variable')
+    parser.add_argument('--min_categories', default=2, type=int, help='Minimum number of categories of a causal variable')
+    parser.add_argument('--max_categories', default=10, type=int, help='Maximum number of categories of a causal variable')
     parser.add_argument('--n_obs_samples', default=10000, type=int, help='Number of observational samples from the joint distribution of a synthetic graph')
     parser.add_argument('--n_int_samples', default=1000, type=int, help='Number of samples from one intervention')
     parser.add_argument('--max_interventions', default=1, type=int, help='Maximum number of interventions')

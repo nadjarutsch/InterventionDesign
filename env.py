@@ -3,7 +3,7 @@ from gym import spaces
 import numpy as np
 import torch
 
-from causal_graphs.graph_generation import generate_categorical_graph
+from causal_graphs.graph_generation import generate_categorical_graph, get_graph_func
 from causal_graphs.graph_visualization import visualize_graph
 from causal_graphs.variable_distributions import _random_categ
 from datasets import CategoricalData
@@ -15,13 +15,15 @@ class CausalEnv(gym.Env):
     
     Attributes:
         num_vars: Number of variables of the sampled DAG.
-        max_categs: (Maximum) number of categories of each causal variable.
+        min_categs: Minimum number of categories of each causal variable.
+        max_categs: Maximum number of categories of each causal variable.
         graph_structure: Structure of the sampled DAG.
     """
     metadata = {'render.modes': ['human']}
   
     def __init__(self, 
                  num_vars: int, 
+                 min_categs: int,
                  max_categs: int,
                  graph_structure: str = 'random'):
         """Inits an instance of the environment with the given attributes."""
@@ -29,13 +31,13 @@ class CausalEnv(gym.Env):
         super(CausalEnv, self).__init__()
         
         # Sample an underlying DAG
-        # TODO: add graph_structure as parameter in generate_categorical_graph
         self.dag = generate_categorical_graph(num_vars=num_vars,
-                                   min_categs=max_categs, # TODO: can this be changed?
-                                   max_categs=max_categs,
-                                   edge_prob=0.0,
-                                   connected=True,
-                                   seed=42)
+                                              min_categs=min_categs,
+                                              max_categs=max_categs,
+                                              connected=True,
+                                              graph_func=get_graph_func(graph_structure),
+                                              edge_prob=0.4,
+                                              use_nn=True)
         
         # One action is an intervention on one node (sparse interventions)
         self.action_space = spaces.Discrete(num_vars)
