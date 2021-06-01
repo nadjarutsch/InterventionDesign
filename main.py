@@ -1,6 +1,5 @@
 from env import CausalEnv
 from heuristics import choose_intervention
-from graph_scoring import GraphScoring # TODO
 from graph_update import GraphUpdate # TODO
 
 import numpy as np
@@ -13,6 +12,7 @@ from typing import Tuple
 from causal_discovery.multivariable_mlp import create_model, MultivarMLP
 from experiments.utils import track
 from causal_discovery.graph_fitting import GraphFitting
+from DAG_matrix.adam_theta import AdamTheta
 
 
     
@@ -29,8 +29,13 @@ def main(args: argparse.Namespace):
     
     # initialize optimizers
     model_optimizer = torch.optim.Adam(model.parameters(), lr=args.lr_model, betas=args.betas_model)
-    gamma_optimizer = None # TODO
-    theta_optimizer = None # TODO
+    
+    if args.betas_gamma[1] > 0:
+        gamma_optimizer = torch.optim.Adam([gamma], lr=args.lr_gamma, betas=args.betas_gamma)
+    else:
+        gamma_optimizer = torch.optim.SGD([gamma], lr=args.lr_gamma, momentum=args.betas_gamma[0])
+
+    theta_optimizer = AdamTheta(theta, lr=args.lr_theta, beta1=args.betas_theta[0], beta2=args.betas_theta[1])
     
     # initialize the environment: create a graph and generate observational 
     # samples from the joint distribution of the graph
@@ -196,10 +201,16 @@ if __name__ == '__main__':
     parser.add_argument('--heuristic', choices=['uniform', 'uncertain'], default='uncertain', help='Heuristic used for choosing intervention nodes')
 
     # Graph fitting
-    parser.add_argument('--lr_model', default=2e-2, type=float, help='Learning rate for fitting the model to observational data')
-    parser.add_argument('--betas_model', default=(0.9,0.999), type=tuple, help='Betas used for Adam optimizer')
     parser.add_argument('--obs_batch_size', default=128, type=int, help='Batch size used for fitting the graph to observational data')
     parser.add_argument('--fitting_epochs', default=10, type=int, help='Number of epochs for fitting the causal structure to observational data' )
+    
+    # Optimizers
+    parser.add_argument('--lr_model', default=2e-2, type=float, help='Learning rate for fitting the model to observational data')
+    parser.add_argument('--betas_model', default=(0.9,0.999), type=tuple, help='Betas used for Adam optimizer (model fitting)')
+    parser.add_argument('--lr_gamma', default=5e-3, type=float, help='Learning rate for updating gamma parameters')
+    parser.add_argument('--betas_gamma', default=(0.1,0.1), type=tuple, help='Betas used for Adam optimizer OR momentum used for SGD (gamma update)')
+    parser.add_argument('--lr_theta', default=5e-3, type=float, help='Learning rate for updating theta parameters')
+    parser.add_argument('--betas_theta', default=(0.9,0.999), type=tuple, help='Betas used for Adam Theta optimizer (theta update)')
     
     # Graph scoring
     parser.add_argument('--int_batch_size', default=64, type=int, help='Batch size used for scoring based on interventional data')
