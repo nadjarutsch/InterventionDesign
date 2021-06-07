@@ -61,16 +61,17 @@ def main(args: argparse.Namespace):
     for epoch in track(range(args.max_interventions), leave=False, desc="Epoch loop"):
         # fit model to observational data
         fittingModule, loss = obs_step(args, fittingModule, updateModule.gamma, updateModule.theta, obs_dataloader)
-        
         metric_before = eval_model() # TODO: needed?
         
         # perform intervention and update parameters based on interventional data
         int_idx = choose_intervention(heuristic=args.heuristic, gamma=gamma.detach(), theta=theta.detach())
         int_data, reward, info = env.step(int_idx, args.n_int_samples) # TODO in env.py: provide data as torch.utils.data.Dataset
         int_dataloader = DataLoader(int_data, batch_size=args.int_batch_size, shuffle=True, drop_last=True)
+        updateModule.dataloader = int_dataloader
         
         # TODO
-        updateModule = int_step(args, updateModule, fittingModule.model, int_idx, int_dataloader)
+        updateModule.epoch = epoch
+        updateModule = int_step(args, updateModule, fittingModule.model, int_idx)
         
         # TODO
         metric_after = eval_model()        
@@ -97,7 +98,7 @@ def init_model(args: argparse.Namespace) -> Tuple[MultivarMLP, nn.Parameter, nn.
         theta: Matrix of theta values (determining edge directions).
     """
     model = create_model(num_vars=args.num_variables, 
-                         num_categs=args.num_categories, 
+                         num_categs=args.max_categories, 
                          hidden_dims=[64], 
                          share_embeds=False,
                          actfn='leakyrelu',
@@ -157,11 +158,10 @@ def obs_step(args: argparse.Namespace,
 def int_step(args: argparse.Namespace,
              updateModule: GraphUpdate,
              model: MultivarMLP,
-             int_idx: int,
-             int_dataloader: DataLoader) -> GraphUpdate:
+             int_idx: int) -> GraphUpdate:
 
-    for _ in track(range(args.int_iters), leave=False, desc="Gamma update loop"):
-        updateModule.update(model, int_dataloader, int_idx) # TODO
+    for _ in track(range(args.int_epochs), leave=False, desc="Gamma and theta update loop"):
+        updateModule.update_step(model, int_idx) # TODO
 
     return updateModule
 
@@ -200,9 +200,9 @@ if __name__ == '__main__':
     parser.add_argument('--graph_structure', choices=['random', 'jungle', 'chain'], default='random', help='Structure of the true causal graph')
     parser.add_argument('--heuristic', choices=['uniform', 'uncertain'], default='uncertain', help='Heuristic used for choosing intervention nodes')
 
-    # Graph fitting
+    # Graph fitting (observational data)
     parser.add_argument('--obs_batch_size', default=128, type=int, help='Batch size used for fitting the graph to observational data')
-    parser.add_argument('--fitting_epochs', default=10, type=int, help='Number of epochs for fitting the causal structure to observational data' )
+    parser.add_argument('--fitting_epochs', default=10, type=int, help='Number of epochs for fitting the causal structure to observational data')
     
     # Optimizers
     parser.add_argument('--lr_model', default=2e-2, type=float, help='Learning rate for fitting the model to observational data')
@@ -212,8 +212,9 @@ if __name__ == '__main__':
     parser.add_argument('--lr_theta', default=5e-3, type=float, help='Learning rate for updating theta parameters')
     parser.add_argument('--betas_theta', default=(0.9,0.999), type=tuple, help='Betas used for Adam Theta optimizer (theta update)')
     
-    # Graph scoring
+    # Graph update (interventional data)
     parser.add_argument('--int_batch_size', default=64, type=int, help='Batch size used for scoring based on interventional data')
+    parser.add_argument('--int_epochs', default=10, type=int, help='Number of epochs for updating the graph gamma and theta parameters of the graph')
     
 
     args: argparse.Namespace = parser.parse_args()
