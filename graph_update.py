@@ -40,8 +40,8 @@ class GraphUpdate(object):
             self.gamma_optimizer.zero_grad()
             self.theta_optimizer.zero_grad()
             int_batch = self._get_next_batch()
-            adj_matrices, logregret = self.score(int_batch, int_idx, model, self.gamma, self.theta, only_theta)
-            theta_mask = self.update(adj_matrices, logregret, self.gamma, self.theta, int_idx) # TODO
+            adj_matrices, logregret = self.score(int_batch, int_idx, model, only_theta)
+            theta_mask = self.update(int_idx, adj_matrices, logregret) # TODO
             if not only_theta:
                 self.gamma_optimizer.step()
             self.theta_optimizer.step(theta_mask)
@@ -50,8 +50,6 @@ class GraphUpdate(object):
     def score(self, int_batch, 
               int_idx, 
               model, 
-              gamma, 
-              theta, 
               only_theta, 
               mirror_graphs=False, 
               C_s=200):
@@ -62,8 +60,8 @@ class GraphUpdate(object):
         C_s_list = [min(self.max_graph_stacking, C_s-i*self.max_graph_stacking) for i in range(math.ceil(C_s * 1.0 / self.max_graph_stacking))]
         C_s_list = [(C_s_list[i],sum(C_s_list[:i])) for i in range(len(C_s_list))]
 
-        edge_prob = torch.sigmoid(gamma).detach()
-        orientation_prob = torch.sigmoid(theta).detach()
+        edge_prob = torch.sigmoid(self.gamma).detach()
+        orientation_prob = torch.sigmoid(self.theta).detach()
         edge_prob_batch = edge_prob[None].expand(C_s,-1,-1)
         orientation_prob_batch = orientation_prob[None].expand(C_s,-1,-1)
 
@@ -134,3 +132,7 @@ class GraphUpdate(object):
         else:
             device = model.device
         return device
+
+    def update(self, int_idx, adj_matrices, logregret):
+        pass
+        
