@@ -6,7 +6,7 @@ import torch
 from causal_graphs.graph_generation import generate_categorical_graph, get_graph_func
 from causal_graphs.graph_visualization import visualize_graph
 from causal_graphs.variable_distributions import _random_categ
-from datasets import CategoricalData
+from datasets import GraphData
 
 
 
@@ -52,8 +52,7 @@ class CausalEnv(gym.Env):
         # Perform intervention, sample from interventional SCM     
         var = self.dag.variables[action_idx]
         
-        # Soft intervention => replace p(X_n) by uniform categorical
-        # TODO: I believe this is still called a (stochastic) hard intervention?
+        # Hard intervention => replace p(X_n) by uniform categorical
         int_dist = _random_categ(size=(var.prob_dist.num_categs,), scale=0.0, axis=-1)
         value = np.random.multinomial(n=1, pvals=int_dist, size=(num_samples,))
         value = np.argmax(value, axis=-1) # One-hot to index
@@ -62,7 +61,7 @@ class CausalEnv(gym.Env):
         int_data = self.dag.sample(interventions=intervention_dict, 
                                    batch_size=num_samples, 
                                    as_array=True)        
-        int_data = torch.from_numpy(int_data) # TODO: provide as torch.utils.data.Dataset
+        int_data = GraphData(data=torch.from_numpy(int_data)) 
 
         
         reward = -1 # incentivice agent to perform as few interventions as possible
@@ -70,8 +69,8 @@ class CausalEnv(gym.Env):
         
         return int_data, reward, info
     
-    def reset(self, n_samples: int) -> CategoricalData:
-        dataset = CategoricalData(self.dag, dataset_size=n_samples)  
+    def reset(self, n_samples: int) -> GraphData:
+        dataset = GraphData(graph=self.dag, dataset_size=n_samples)  
         return dataset
     
     def render(self, mode='human', close=False):

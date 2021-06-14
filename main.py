@@ -47,45 +47,44 @@ def main(args: argparse.Namespace):
     obs_dataloader = DataLoader(obs_data, batch_size=args.obs_batch_size, shuffle=True, drop_last=True)
     
     # initialize fitting module
-    fittingModule = GraphFitting(model, 
+    distributionFitting = GraphFitting(model, 
                                  model_optimizer, 
                                  obs_dataloader)
     
-    # TODO: implement updateModule as combined scoring & update module
     updateModule = GraphUpdate(gamma,
                                theta,
                                gamma_optimizer,
                                theta_optimizer)
     
+    shd = eval_model() # TODO: structural hamming distance
+    
     # causal discovery training loop
     for epoch in track(range(args.max_interventions), leave=False, desc="Epoch loop"):
-        # fit model to observational data
-        fittingModule, loss = obs_step(args, fittingModule, updateModule.gamma, updateModule.theta, obs_dataloader)
-        metric_before = eval_model() # TODO: needed?
+        # fit model to observational data (distribution fitting)
+        distributionFitting, loss = obs_step(args, distributionFitting, updateModule.gamma, updateModule.theta, obs_dataloader)
         
         # perform intervention and update parameters based on interventional data
         int_idx = choose_intervention(heuristic=args.heuristic, gamma=gamma.detach(), theta=theta.detach())
-        int_data, reward, info = env.step(int_idx, args.n_int_samples) # TODO in env.py: provide data as torch.utils.data.Dataset
+        int_data, reward, info = env.step(int_idx, args.n_int_samples) 
         int_dataloader = DataLoader(int_data, batch_size=args.int_batch_size, shuffle=True, drop_last=True)
         updateModule.dataloader = int_dataloader
-        
-        # TODO
+       
+        # graph fitting
         updateModule.epoch = epoch
-        updateModule = int_step(args, updateModule, fittingModule.model, int_idx)
+        updateModule = int_step(args, updateModule, distributionFitting.model, int_idx)
         
         # TODO
-        metric_after = eval_model()        
-        metric_diff = metric_before - metric_after
-        metric_rel = metric_after / metric_before 
+        shd = eval_model()        
+ #       metric_diff = metric_before - metric_after
+  #      metric_rel = metric_after / metric_before 
 
 
 
    
-# TODO: maybe return fittingModule, updateModule instead of MLP, gamma, theta?    
 def init_model(args: argparse.Namespace) -> Tuple[MultivarMLP, nn.Parameter, nn.Parameter]:
     """Initializes a complete model of the causal structure, consisting of a 
     multivariable MLP which models the conditional distributions of the causal 
-    variables, and gamma and theta values which describe the adjacency matrix 
+    variables, and gamma and theta values which define the adjacency matrix 
     of the causal graph.
     
     Args:
@@ -115,7 +114,7 @@ def init_model(args: argparse.Namespace) -> Tuple[MultivarMLP, nn.Parameter, nn.
 
     
 def obs_step(args: argparse.Namespace,
-             fittingModule: GraphFitting,
+             distributionFitting: GraphFitting,
              gamma: nn.Parameter,
              theta: nn.Parameter,
              dataloader: DataLoader) -> Tuple[GraphFitting, float]:
@@ -125,7 +124,7 @@ def obs_step(args: argparse.Namespace,
     Args:
         args: Object from the argument parser that defines various settings of
             the causal structure and discovery process.
-        fittingModule: Module used for fitting the MLP to observational data 
+        distributionFitting: Module used for fitting the MLP to observational data 
             and the predicted adjacency matrix.
         gamma: Matrix of gamma values (determining edge probabilities).
         theta: Matrix of theta values (determining edge directions).
@@ -133,7 +132,7 @@ def obs_step(args: argparse.Namespace,
             bution.
     
     Returns:
-        fittingModule: Fitting module with updated MLP.
+        distributionFitting: Fitting module with updated MLP.
         loss: Average loss in one fitting epoch.
     """
     sample_matrix = torch.sigmoid(gamma.detach())
@@ -144,24 +143,23 @@ def obs_step(args: argparse.Namespace,
     avg_loss = 0.0
     t = track(range(args.fitting_epochs), leave=False, desc="Model update loop")
     for _ in t:
-        loss = fittingModule.fit_step(sample_func=sfunc)
+        loss = distributionFitting.fit_step(sample_func=sfunc)
         avg_loss += loss
         if hasattr(t, "set_description"):
             t.set_description("Model update loop, loss: %4.2f" % loss)
 
-    avg_loss /= args.fitting_epochs # TODO: do I need this?
+    avg_loss /= args.fitting_epochs 
     
-    return fittingModule, avg_loss
+    return distributionFitting, avg_loss
 
 
-# TODO: combine GraphScoring and GraphUpdate into new updateModule?
 def int_step(args: argparse.Namespace,
              updateModule: GraphUpdate,
              model: MultivarMLP,
              int_idx: int) -> GraphUpdate:
 
     for _ in track(range(args.int_epochs), leave=False, desc="Gamma and theta update loop"):
-        updateModule.update_step(model, int_idx) # TODO
+        updateModule.update_step(model, int_idx) 
 
     return updateModule
 

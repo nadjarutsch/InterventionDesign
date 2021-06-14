@@ -17,7 +17,9 @@ class GraphUpdate(object):
                  theta_pretraining=False,
                  theta_alternate=False,
                  gamma_iters=100,
-                 max_graph_stacking=1000):
+                 max_graph_stacking=1000,
+                 lambda_sparse=0.001,
+                 theta_regularizer=False):
         super().__init__()
         self.gamma = gamma
         self.theta = theta
@@ -29,6 +31,8 @@ class GraphUpdate(object):
         self.gamma_iters = gamma_iters
         self.pretrain_iters = 10*self.gamma_iters
         self.max_graph_stacking = max_graph_stacking
+        self.lambda_sparse=0.001
+        self.theta_regularizer = theta_regularizer
         
         
         
@@ -134,5 +138,49 @@ class GraphUpdate(object):
         return device
 
     def update(self, int_idx, adj_matrices, logregret):
-        pass
+        if self.gamma.grad is not None:
+            self.gamma.grad.fill_(0)
+            gamma_grads, theta_grads, debug = self.gradient_estimator(adj_matrices, logregret, int_idx)
+            self.gamma.grad = gamma_grads
+            self.theta.grad = theta_grads
+
+            return debug["theta_mask"]
+        
+    @torch.no_grad()
+    def gradient_estimator(self, adj_matrices, logregret, int_idx):
+        batch_size = adj_matrices.shape[0]
+        logregret = logregret.unsqueeze(dim=1)
+
+        comp_probs = torch.sigmoid(self.theta)
+        edge_probs = torch.sigmoid(self.gamma)
+        
+        num_pos = adj_matrices.sum(dim=0)
+        num_neg = batch_size - num_pos
+        mask = ((num_pos > 0) * (num_neg > 0)).float()
+        pos_grads = (logregret * adj_matrices).sum(dim=0) / num_pos.clamp_(min=1e-5)
+        neg_grads = (logregret * (1 - adj_matrices)).sum(dim=0) / num_neg.clamp_(min=1e-5)
+        gamma_grads = mask * edge_probs * (1 - edge_probs) * comp_probs * (pos_grads - neg_grads + self.lambda_sparse)
+
+        theta_inner_grads = edge_probs * (pos_grads - neg_grads)
+        if self.theta_regularizer:
+            theta_inner_grads += 0.5 * self.lambda_sparse * (edge_probs - edge_probs.T)
+        theta_grads = mask * comp_probs * (1 - comp_probs) * theta_inner_grads
+        theta_grads[:int_idx] = 0
+        theta_grads[int_idx+1:] = 0
+        theta_grads -= theta_grads.transpose(0, 1)
+
+        # Creating a mask which theta's are actually updated
+        theta_mask = torch.zeros_like(theta_grads)
+        theta_mask[int_idx] = 1.
+        theta_mask[:,int_idx] = 1.
+        theta_mask[int_idx,int_idx] = 0
+
+        debug = {
+            "theta_grads": theta_grads,
+            "comp_probs": comp_probs,
+            "logregret": logregret,
+            "theta_mask": theta_mask
+        }
+        
+        return gamma_grads, theta_grads, debug
         
