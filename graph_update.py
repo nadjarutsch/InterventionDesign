@@ -16,7 +16,7 @@ class GraphUpdate(object):
                  theta_optimizer, 
                  theta_pretraining=False,
                  theta_alternate=False,
-                 gamma_iters=100,
+                 gamma_iters=1,
                  max_graph_stacking=1000,
                  lambda_sparse=0.001,
                  theta_regularizer=False):
@@ -31,7 +31,7 @@ class GraphUpdate(object):
         self.gamma_iters = gamma_iters
         self.pretrain_iters = 10*self.gamma_iters
         self.max_graph_stacking = max_graph_stacking
-        self.lambda_sparse=0.001
+        self.lambda_sparse=lambda_sparse
         self.theta_regularizer = theta_regularizer
         
         
@@ -46,6 +46,7 @@ class GraphUpdate(object):
             int_batch = self._get_next_batch()
             adj_matrices, logregret = self.score(int_batch, int_idx, model, only_theta)
             theta_mask = self.update(int_idx, adj_matrices, logregret) # TODO
+            print('INT_IDX ', int_idx)
             if not only_theta:
                 self.gamma_optimizer.step()
             self.theta_optimizer.step(theta_mask)
@@ -140,11 +141,11 @@ class GraphUpdate(object):
     def update(self, int_idx, adj_matrices, logregret):
         if self.gamma.grad is not None:
             self.gamma.grad.fill_(0)
-            gamma_grads, theta_grads, debug = self.gradient_estimator(adj_matrices, logregret, int_idx)
-            self.gamma.grad = gamma_grads
-            self.theta.grad = theta_grads
-
-            return debug["theta_mask"]
+        gamma_grads, theta_grads, debug = self.gradient_estimator(adj_matrices, logregret, int_idx)
+        self.gamma.grad = gamma_grads
+        self.theta.grad = theta_grads
+            
+        return debug["theta_mask"]
         
     @torch.no_grad()
     def gradient_estimator(self, adj_matrices, logregret, int_idx):
@@ -153,6 +154,7 @@ class GraphUpdate(object):
 
         comp_probs = torch.sigmoid(self.theta)
         edge_probs = torch.sigmoid(self.gamma)
+        
         
         num_pos = adj_matrices.sum(dim=0)
         num_neg = batch_size - num_pos

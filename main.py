@@ -1,6 +1,6 @@
 from env import CausalEnv
 from heuristics import choose_intervention
-from graph_update import GraphUpdate # TODO
+from graph_update import GraphUpdate 
 
 import numpy as np
 import argparse
@@ -13,6 +13,9 @@ from causal_discovery.multivariable_mlp import create_model, MultivarMLP
 from experiments.utils import track
 from causal_discovery.graph_fitting import GraphFitting
 from DAG_matrix.adam_theta import AdamTheta
+
+from metrics import retrieve_adjacency_matrix
+from metrics import SHD
 
 
     
@@ -46,7 +49,7 @@ def main(args: argparse.Namespace):
     obs_data = env.reset(n_samples=args.n_obs_samples)
     obs_dataloader = DataLoader(obs_data, batch_size=args.obs_batch_size, shuffle=True, drop_last=True)
     
-    # initialize fitting module
+    # initialize fitting modules
     distributionFitting = GraphFitting(model, 
                                  model_optimizer, 
                                  obs_dataloader)
@@ -56,15 +59,18 @@ def main(args: argparse.Namespace):
                                gamma_optimizer,
                                theta_optimizer)
     
-    shd = eval_model() # TODO: structural hamming distance
+    shd = eval_model(gamma,theta,env) 
+    print(shd)
     
     # causal discovery training loop
     for epoch in track(range(args.max_interventions), leave=False, desc="Epoch loop"):
         # fit model to observational data (distribution fitting)
         distributionFitting, loss = obs_step(args, distributionFitting, updateModule.gamma, updateModule.theta, obs_dataloader)
+        print(loss)
         
         # perform intervention and update parameters based on interventional data
-        int_idx = choose_intervention(heuristic=args.heuristic, gamma=gamma.detach(), theta=theta.detach())
+        int_idx = choose_intervention(heuristic=args.heuristic, gamma=updateModule.gamma.detach(), theta=updateModule.theta.detach())
+        print('INT_IDX: ', int_idx)
         int_data, reward, info = env.step(int_idx, args.n_int_samples) 
         int_dataloader = DataLoader(int_data, batch_size=args.int_batch_size, shuffle=True, drop_last=True)
         updateModule.dataloader = int_dataloader
@@ -74,7 +80,8 @@ def main(args: argparse.Namespace):
         updateModule = int_step(args, updateModule, distributionFitting.model, int_idx)
         
         # TODO
-        shd = eval_model()        
+        shd = eval_model(updateModule.gamma, updateModule.theta, env)  
+        print(shd)
  #       metric_diff = metric_before - metric_after
   #      metric_rel = metric_after / metric_before 
 
@@ -176,8 +183,17 @@ def sample_func(sample_matrix, theta, batch_size):
         return A 
     
 # TODO
-def eval_model():
-    return 1
+def eval_model(gamma, theta, env):
+    adj_matrix_pred = get_binary_adjmatrix(gamma, theta).numpy()
+    adj_matrix_target = env.dag.adj_matrix   
+    shd = SHD(adj_matrix_target, adj_matrix_pred, double_for_anticausal=False)
+    print(theta, adj_matrix_pred, adj_matrix_target)
+    return shd
+
+
+def get_binary_adjmatrix(gamma, theta):
+        A = (gamma > 0.0) * (theta > 0.0)
+        return (A == 1).cpu()
 
 
     
@@ -194,11 +210,11 @@ if __name__ == '__main__':
     parser.add_argument('--max_categories', default=10, type=int, help='Maximum number of categories of a causal variable')
     parser.add_argument('--n_obs_samples', default=10000, type=int, help='Number of observational samples from the joint distribution of a synthetic graph')
     parser.add_argument('--n_int_samples', default=1000, type=int, help='Number of samples from one intervention')
-    parser.add_argument('--max_interventions', default=1, type=int, help='Maximum number of interventions')
+    parser.add_argument('--max_interventions', default=100, type=int, help='Maximum number of interventions')
     parser.add_argument('--graph_structure', choices=['random', 'jungle', 'chain'], default='random', help='Structure of the true causal graph')
-    parser.add_argument('--heuristic', choices=['uniform', 'uncertain'], default='uncertain', help='Heuristic used for choosing intervention nodes')
+    parser.add_argument('--heuristic', choices=['uniform', 'uncertain'], default='uniform', help='Heuristic used for choosing intervention nodes')
 
-    # Graph fitting (observational data)
+    # Distribution fitting (observational data)
     parser.add_argument('--obs_batch_size', default=128, type=int, help='Batch size used for fitting the graph to observational data')
     parser.add_argument('--fitting_epochs', default=10, type=int, help='Number of epochs for fitting the causal structure to observational data')
     
@@ -210,7 +226,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr_theta', default=5e-3, type=float, help='Learning rate for updating theta parameters')
     parser.add_argument('--betas_theta', default=(0.9,0.999), type=tuple, help='Betas used for Adam Theta optimizer (theta update)')
     
-    # Graph update (interventional data)
+    # Graph fitting (interventional data)
     parser.add_argument('--int_batch_size', default=64, type=int, help='Batch size used for scoring based on interventional data')
     parser.add_argument('--int_epochs', default=10, type=int, help='Number of epochs for updating the graph gamma and theta parameters of the graph')
     
