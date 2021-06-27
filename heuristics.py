@@ -1,10 +1,11 @@
 import torch
 import numpy as np
+import argparse
 
 HEURISTICS = ['uniform', 'uncertain']
 
 
-def choose_intervention(heuristic: str, gamma: torch.Tensor, theta: torch.Tensor) -> int:
+def choose_intervention(args: argparse.Namespace, gamma: torch.Tensor, theta: torch.Tensor) -> int:
     """Chooses a node for intervention.
     
     Args:
@@ -17,14 +18,14 @@ def choose_intervention(heuristic: str, gamma: torch.Tensor, theta: torch.Tensor
     Raises:
         Exception: If heuristic is not available.
     """    
-    if heuristic == HEURISTICS[0]:
+    if args.heuristic == HEURISTICS[0]:
         return uniform(gamma)
     
-    elif heuristic == HEURISTICS[1]:
-        return uncertain(gamma, theta)  
+    elif args.heuristic == HEURISTICS[1]:
+        return uncertain(args, gamma, theta)  
     
     else:
-        raise Exception('Heuristic is not available. \n Chosen heuristic: {} \n Available heuristics: {}'.format(heuristic, HEURISTICS))
+        raise Exception('Heuristic is not available. \n Chosen heuristic: {} \n Available heuristics: {}'.format(args.heuristic, HEURISTICS))
 
 
 def uniform(gamma: torch.Tensor) -> int:
@@ -33,13 +34,19 @@ def uniform(gamma: torch.Tensor) -> int:
     return np.random.randint(gamma.shape[-1])
 
 
-def uncertain(gamma: torch.Tensor, theta: torch.Tensor) -> int:
+def uncertain(args: argparse.Namespace,
+              gamma: torch.Tensor, 
+              theta: torch.Tensor) -> int:
     """Chooses the intervention node with the most uncertain outgoing edge."""
     
-    # TODO: check if this works as intended, maybe try abs(gamma) + abs(theta)?
-    certainty = gamma * theta
-    print('CERTAINTY :', np.abs(certainty.numpy()), np.argmin(np.abs(certainty.numpy())))
+    probs = torch.sigmoid(args.temperature * gamma * theta) 
+    certainty = probs * (1-probs)
+    
+    # don't sample variables based on self-cycle edges
+    certainty.fill_diagonal_(0)
+    
+    int_idx = torch.multinomial(certainty.flatten(), num_samples=1)
     
     # TODO: check if [0] really returns the node with the most uncertain 
     # outgoing edge
-    return np.unravel_index(np.argmin(np.abs(certainty.numpy())), gamma.shape)[1]
+    return np.unravel_index(int_idx, gamma.shape)[0][0]
