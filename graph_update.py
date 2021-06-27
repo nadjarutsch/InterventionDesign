@@ -40,16 +40,14 @@ class GraphUpdate(object):
         self.data_iter = iter(self.dataloader)
         only_theta = (self.epoch < self.theta_pretraining) or (self.theta_alternate and self.epoch % 2 == 0)
         iters = self.gamma_iters if not only_theta else self.pretrain_iters
-        for _ in track(range(iters), leave=False, desc="Gamma and theta update loop"):
-            self.gamma_optimizer.zero_grad()
-            self.theta_optimizer.zero_grad()
-            int_batch = self._get_next_batch()
-            adj_matrices, logregret = self.score(int_batch, int_idx, model, only_theta)
-            theta_mask = self.update(int_idx, adj_matrices, logregret) # TODO
-            print('INT_IDX ', int_idx)
-            if not only_theta:
-                self.gamma_optimizer.step()
-            self.theta_optimizer.step(theta_mask)
+        self.gamma_optimizer.zero_grad()
+        self.theta_optimizer.zero_grad()
+        int_batch = self._get_next_batch()
+        adj_matrices, logregret = self.score(int_batch, int_idx, model, only_theta)
+        theta_mask = self.update(int_idx, adj_matrices, logregret) # TODO
+        if not only_theta:
+            self.gamma_optimizer.step()
+        self.theta_optimizer.step(theta_mask)
                 
                 
     def score(self, int_batch, 
