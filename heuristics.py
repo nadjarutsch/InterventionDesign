@@ -38,7 +38,8 @@ def uncertain(gamma: torch.Tensor, theta: torch.Tensor) -> int:
     
     # TODO: check if this works as intended, maybe try abs(gamma) + abs(theta)?
     certainty = gamma * theta
+    print('CERTAINTY :', np.abs(certainty.numpy()), np.argmin(np.abs(certainty.numpy())))
     
     # TODO: check if [0] really returns the node with the most uncertain 
     # outgoing edge
-    return np.unravel_index(np.argmin(np.abs(certainty.numpy())), gamma.shape)[0]
+    return np.unravel_index(np.argmin(np.abs(certainty.numpy())), gamma.shape)[1]

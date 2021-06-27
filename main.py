@@ -14,7 +14,6 @@ from experiments.utils import track
 from causal_discovery.graph_fitting import GraphFitting
 from DAG_matrix.adam_theta import AdamTheta
 
-from metrics import retrieve_adjacency_matrix
 from metrics import SHD
 
 
@@ -60,30 +59,23 @@ def main(args: argparse.Namespace):
                                theta_optimizer)
     
     shd = eval_model(gamma,theta,env) 
-    print(shd)
     
     # causal discovery training loop
     for epoch in track(range(args.max_interventions), leave=False, desc="Epoch loop"):
         # fit model to observational data (distribution fitting)
         distributionFitting, loss = obs_step(args, distributionFitting, updateModule.gamma, updateModule.theta, obs_dataloader)
-        print(loss)
         
         # perform intervention and update parameters based on interventional data
         int_idx = choose_intervention(heuristic=args.heuristic, gamma=updateModule.gamma.detach(), theta=updateModule.theta.detach())
-        print('INT_IDX: ', int_idx)
         int_data, reward, info = env.step(int_idx, args.n_int_samples) 
         int_dataloader = DataLoader(int_data, batch_size=args.int_batch_size, shuffle=True, drop_last=True)
-        updateModule.dataloader = int_dataloader
        
         # graph fitting
-        updateModule.epoch = epoch
-        updateModule = int_step(args, updateModule, distributionFitting.model, int_idx)
+        updateModule = int_step(args, updateModule, distributionFitting.model, int_idx, int_dataloader, epoch)
         
-        # TODO
+        # TODO : logging
         shd = eval_model(updateModule.gamma, updateModule.theta, env)  
-        print(shd)
- #       metric_diff = metric_before - metric_after
-  #      metric_rel = metric_after / metric_before 
+        print("\n", shd)
 
 
 
@@ -131,8 +123,8 @@ def obs_step(args: argparse.Namespace,
     Args:
         args: Object from the argument parser that defines various settings of
             the causal structure and discovery process.
-        distributionFitting: Module used for fitting the MLP to observational data 
-            and the predicted adjacency matrix.
+        distributionFitting: Module used for fitting the MLP to observational 
+            data and the predicted adjacency matrix.
         gamma: Matrix of gamma values (determining edge probabilities).
         theta: Matrix of theta values (determining edge directions).
         dataloader: Dataloader with observational data from the joint distri-
@@ -140,7 +132,7 @@ def obs_step(args: argparse.Namespace,
     
     Returns:
         distributionFitting: Fitting module with updated MLP.
-        loss: Average loss in one fitting epoch.
+        avg_loss: Average loss in one fitting epoch.
     """
     sample_matrix = torch.sigmoid(gamma.detach())
     sfunc = lambda batch_size: sample_func(sample_matrix=sample_matrix, 
@@ -163,8 +155,27 @@ def obs_step(args: argparse.Namespace,
 def int_step(args: argparse.Namespace,
              updateModule: GraphUpdate,
              model: MultivarMLP,
-             int_idx: int) -> GraphUpdate:
-
+             int_idx: int,
+             int_dataloader: DataLoader,
+             epoch: int) -> GraphUpdate:
+    """Fit the adjacency matrix to interventional data, given the learned 
+    multivariable MLP.
+    
+    Args:
+        args: Object from the argument parser that defines various settings of
+            the causal structure and discovery process.
+        updateModule: Module used for fitting the graph to interventional data.
+        model: Multivariable MLP (modelling the conditional distributions).
+        int_idx: Index of the intervention variable.
+        int_dataloader: Dataloader with interventional data.
+        epoch: Current epoch, used for theta pretraining threshold.
+    
+    Returns:
+        updateModule: Graph fitting module with updated adjacency matrix.
+    """
+    updateModule.dataloader = int_dataloader
+    updateModule.epoch = epoch
+    
     for _ in track(range(args.int_epochs), leave=False, desc="Gamma and theta update loop"):
         updateModule.update_step(model, int_idx) 
 
@@ -172,28 +183,28 @@ def int_step(args: argparse.Namespace,
 
     
 def sample_func(sample_matrix, theta, batch_size):
-        A = sample_matrix[None].expand(batch_size, -1, -1)
-        A = torch.bernoulli(A)
-        order_p = torch.sigmoid(theta) * (1 - torch.eye(theta.shape[0], device=theta.device))
-        order_p = order_p[None].expand(batch_size, -1, -1)
-        order_mask = torch.bernoulli(order_p)
-
-        A = A * order_mask
-
-        return A 
     
-# TODO
+    A = sample_matrix[None].expand(batch_size, -1, -1)
+    A = torch.bernoulli(A)
+    order_p = torch.sigmoid(theta) * (1 - torch.eye(theta.shape[0], device=theta.device))
+    order_p = order_p[None].expand(batch_size, -1, -1)
+    order_mask = torch.bernoulli(order_p)
+
+    A = A * order_mask
+
+    return A 
+    
+    
 def eval_model(gamma, theta, env):
-    adj_matrix_pred = get_binary_adjmatrix(gamma, theta).numpy()
+    adj_matrix_pred = get_binary_adjmatrix(gamma, theta).numpy().astype(np.uint16)
     adj_matrix_target = env.dag.adj_matrix   
     shd = SHD(adj_matrix_target, adj_matrix_pred, double_for_anticausal=False)
-    print(theta, adj_matrix_pred, adj_matrix_target)
     return shd
 
 
 def get_binary_adjmatrix(gamma, theta):
-        A = (gamma > 0.0) * (theta > 0.0)
-        return (A == 1).cpu()
+    A = (gamma > 0.0) * (theta > 0.0)
+    return (A).cpu()
 
 
     
@@ -205,12 +216,12 @@ if __name__ == '__main__':
 
     # Settings
     parser.add_argument('--data_parallel', default=False, type=bool, help='Use parallelization for efficiency')
-    parser.add_argument('--num_variables', default=4, type=int, help='Number of causal variables')
+    parser.add_argument('--num_variables', default=10, type=int, help='Number of causal variables')
     parser.add_argument('--min_categories', default=2, type=int, help='Minimum number of categories of a causal variable')
     parser.add_argument('--max_categories', default=10, type=int, help='Maximum number of categories of a causal variable')
     parser.add_argument('--n_obs_samples', default=10000, type=int, help='Number of observational samples from the joint distribution of a synthetic graph')
-    parser.add_argument('--n_int_samples', default=1000, type=int, help='Number of samples from one intervention')
-    parser.add_argument('--max_interventions', default=100, type=int, help='Maximum number of interventions')
+    parser.add_argument('--n_int_samples', default=16, type=int, help='Number of samples from one intervention')
+    parser.add_argument('--max_interventions', default=10000, type=int, help='Maximum number of interventions')
     parser.add_argument('--graph_structure', choices=['random', 'jungle', 'chain'], default='random', help='Structure of the true causal graph')
     parser.add_argument('--heuristic', choices=['uniform', 'uncertain'], default='uniform', help='Heuristic used for choosing intervention nodes')
 
@@ -227,7 +238,7 @@ if __name__ == '__main__':
     parser.add_argument('--betas_theta', default=(0.9,0.999), type=tuple, help='Betas used for Adam Theta optimizer (theta update)')
     
     # Graph fitting (interventional data)
-    parser.add_argument('--int_batch_size', default=64, type=int, help='Batch size used for scoring based on interventional data')
+    parser.add_argument('--int_batch_size', default=16, type=int, help='Batch size used for scoring based on interventional data')
     parser.add_argument('--int_epochs', default=10, type=int, help='Number of epochs for updating the graph gamma and theta parameters of the graph')
     
 
