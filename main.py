@@ -15,6 +15,9 @@ from causal_discovery.graph_fitting import GraphFitting
 from DAG_matrix.adam_theta import AdamTheta
 
 from metrics import SHD
+from torch.utils.tensorboard import SummaryWriter
+from datetime import datetime
+
 
 
     
@@ -58,7 +61,14 @@ def main(args: argparse.Namespace):
                                gamma_optimizer,
                                theta_optimizer)
     
+    date = datetime.today().strftime('%Y-%m-%d')
+    suffix = args.graph_structure + "-" + args.heuristic + datetime.today().strftime('-%H-%M')
+    print(date)
+    print(suffix)
+    writer = SummaryWriter("tb_logs/%s/%s" % (date, suffix))
+    
     shd = eval_model(gamma,theta,env) 
+    writer.add_scalar('SHD', shd, global_step=0)
     
     # causal discovery training loop
     for epoch in track(range(args.max_interventions), leave=False, desc="Epoch loop"):
@@ -74,9 +84,18 @@ def main(args: argparse.Namespace):
         updateModule = int_step(args, updateModule, distributionFitting.model, int_idx, int_dataloader, epoch)
         
         # TODO : logging
+        if eval_model(updateModule.gamma, updateModule.theta, env) == 0:
+            shd_rel = 1
+        else:
+            shd_rel = shd / eval_model(updateModule.gamma, updateModule.theta, env) 
         shd = eval_model(updateModule.gamma, updateModule.theta, env)  
-        print("\n", shd)
-
+        
+        writer.add_scalar('SHD', shd, global_step=epoch)
+        writer.add_scalar('SHD relative', shd_rel, global_step=epoch)
+        
+        # stop early
+        if shd == 0:
+            break
 
 
    
@@ -220,7 +239,7 @@ if __name__ == '__main__':
     parser.add_argument('--min_categories', default=2, type=int, help='Minimum number of categories of a causal variable')
     parser.add_argument('--max_categories', default=10, type=int, help='Maximum number of categories of a causal variable')
     parser.add_argument('--n_obs_samples', default=10000, type=int, help='Number of observational samples from the joint distribution of a synthetic graph')
-    parser.add_argument('--n_int_samples', default=100, type=int, help='Number of samples from one intervention')
+    parser.add_argument('--n_int_samples', default=1000, type=int, help='Number of samples from one intervention')
     parser.add_argument('--max_interventions', default=10000, type=int, help='Maximum number of interventions')
     parser.add_argument('--graph_structure', choices=['random', 'jungle', 'chain'], default='random', help='Structure of the true causal graph')
     parser.add_argument('--heuristic', choices=['uniform', 'uncertain'], default='uncertain', help='Heuristic used for choosing intervention nodes')
