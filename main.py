@@ -63,12 +63,11 @@ def main(args: argparse.Namespace):
     
     date = datetime.today().strftime('%Y-%m-%d')
     suffix = args.graph_structure + "-" + args.heuristic + datetime.today().strftime('-%H-%M')
-    print(date)
-    print(suffix)
     writer = SummaryWriter("tb_logs/%s/%s" % (date, suffix))
     
     shd = eval_model(gamma,theta,env) 
     writer.add_scalar('SHD', shd, global_step=0)
+    shd_rel_lst = []
     
     # causal discovery training loop
     for epoch in track(range(args.max_interventions), leave=False, desc="Epoch loop"):
@@ -76,25 +75,29 @@ def main(args: argparse.Namespace):
         distributionFitting, loss = obs_step(args, distributionFitting, updateModule.gamma, updateModule.theta, obs_dataloader)
         
         # perform intervention and update parameters based on interventional data
-        int_idx = choose_intervention(args, gamma=updateModule.gamma.detach(), theta=updateModule.theta.detach())
+        int_idx = choose_intervention(args, epoch, gamma=updateModule.gamma.detach(), theta=updateModule.theta.detach())
         int_data, reward, info = env.step(int_idx, args.n_int_samples) 
         int_dataloader = DataLoader(int_data, batch_size=args.int_batch_size, shuffle=True, drop_last=True)
        
         # graph fitting
         updateModule = int_step(args, updateModule, distributionFitting.model, int_idx, int_dataloader, epoch)
         
-        # TODO : logging
+        # logging
         if eval_model(updateModule.gamma, updateModule.theta, env) == 0:
             shd_rel = 1
         else:
             shd_rel = shd / eval_model(updateModule.gamma, updateModule.theta, env) 
         shd = eval_model(updateModule.gamma, updateModule.theta, env)  
         
+        shd_rel_lst = shd_rel_lst + [shd_rel]
+        
         writer.add_scalar('SHD', shd, global_step=epoch)
         writer.add_scalar('SHD relative', shd_rel, global_step=epoch)
         
         # stop early
         if shd == 0:
+            writer.add_scalar('Mean SHD relative', sum(shd_rel_lst) / len(shd_rel_lst))
+            writer.add_scalar('Interventions needed', epoch)
             break
 
 
@@ -242,7 +245,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_int_samples', default=1000, type=int, help='Number of samples from one intervention')
     parser.add_argument('--max_interventions', default=10000, type=int, help='Maximum number of interventions')
     parser.add_argument('--graph_structure', choices=['random', 'jungle', 'chain'], default='random', help='Structure of the true causal graph')
-    parser.add_argument('--heuristic', choices=['uniform', 'uncertain'], default='uncertain', help='Heuristic used for choosing intervention nodes')
+    parser.add_argument('--heuristic', choices=['uniform', 'uncertain', 'sequence'], default='sequence', help='Heuristic used for choosing intervention nodes')
     parser.add_argument('--temperature', default=10.0, type=float, help='Temperature used for sampling the intervention variable')
     
 
