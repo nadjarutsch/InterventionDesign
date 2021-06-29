@@ -2,10 +2,10 @@ import torch
 import numpy as np
 import argparse
 
-HEURISTICS = ['uniform', 'uncertain']
+HEURISTICS = ['uniform', 'uncertain', 'sequence']
 
 
-def choose_intervention(args: argparse.Namespace, gamma: torch.Tensor, theta: torch.Tensor) -> int:
+def choose_intervention(args: argparse.Namespace, epoch: int, gamma: torch.Tensor, theta: torch.Tensor) -> int:
     """Chooses a node for intervention.
     
     Args:
@@ -22,7 +22,10 @@ def choose_intervention(args: argparse.Namespace, gamma: torch.Tensor, theta: to
         return uniform(gamma)
     
     elif args.heuristic == HEURISTICS[1]:
-        return uncertain(args, gamma, theta)  
+        return uncertain(args, gamma, theta) 
+    
+    elif args.heuristic == HEURISTICS[2]:
+        return sequence(args, epoch, gamma, theta) 
     
     else:
         raise Exception('Heuristic is not available. \n Chosen heuristic: {} \n Available heuristics: {}'.format(args.heuristic, HEURISTICS))
@@ -50,3 +53,12 @@ def uncertain(args: argparse.Namespace,
     # TODO: check if [0] really returns the node with the most uncertain 
     # outgoing edge
     return np.unravel_index(int_idx, gamma.shape)[0][0]
+
+
+def sequence(args: argparse.Namespace,
+             epoch: int,
+             gamma: torch.Tensor, 
+             theta: torch.Tensor) -> int:
+    """Intervene sequentially on all nodes."""
+    
+    return epoch % gamma.shape[0]
