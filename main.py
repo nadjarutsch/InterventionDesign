@@ -79,6 +79,7 @@ def main(args: argparse.Namespace):
         int_data, reward, info = env.step(int_idx, args.n_int_samples) 
         int_dataloader = DataLoader(int_data, batch_size=args.int_batch_size, shuffle=True, drop_last=True)
        
+        print(int_idx)
         # graph fitting
         updateModule = int_step(args, updateModule, distributionFitting.model, int_idx, int_dataloader, epoch)
         
@@ -242,10 +243,10 @@ if __name__ == '__main__':
     parser.add_argument('--min_categories', default=2, type=int, help='Minimum number of categories of a causal variable')
     parser.add_argument('--max_categories', default=10, type=int, help='Maximum number of categories of a causal variable')
     parser.add_argument('--n_obs_samples', default=10000, type=int, help='Number of observational samples from the joint distribution of a synthetic graph')
-    parser.add_argument('--n_int_samples', default=1000, type=int, help='Number of samples from one intervention')
+    parser.add_argument('--n_int_samples', default=100, type=int, help='Number of samples from one intervention')
     parser.add_argument('--max_interventions', default=10000, type=int, help='Maximum number of interventions')
     parser.add_argument('--graph_structure', choices=['random', 'jungle', 'chain'], default='random', help='Structure of the true causal graph')
-    parser.add_argument('--heuristic', choices=['uniform', 'uncertain', 'sequence'], default='sequence', help='Heuristic used for choosing intervention nodes')
+    parser.add_argument('--heuristic', choices=['uniform', 'uncertain', 'sequence', 'children', 'parents'], default='children', help='Heuristic used for choosing intervention nodes')
     parser.add_argument('--temperature', default=10.0, type=float, help='Temperature used for sampling the intervention variable')
     
 

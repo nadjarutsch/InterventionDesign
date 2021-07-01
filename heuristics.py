@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import argparse
 
-HEURISTICS = ['uniform', 'uncertain', 'sequence']
+HEURISTICS = ['uniform', 'uncertain', 'sequence', 'children', 'parents']
 
 
 def choose_intervention(args: argparse.Namespace, epoch: int, gamma: torch.Tensor, theta: torch.Tensor) -> int:
@@ -26,6 +26,12 @@ def choose_intervention(args: argparse.Namespace, epoch: int, gamma: torch.Tenso
     
     elif args.heuristic == HEURISTICS[2]:
         return sequence(args, epoch, gamma, theta) 
+    
+    elif args.heuristic == HEURISTICS[3]:
+        return children(args, gamma, theta) 
+    
+    elif args.heuristic == HEURISTICS[4]:
+        return parents(args, gamma, theta) 
     
     else:
         raise Exception('Heuristic is not available. \n Chosen heuristic: {} \n Available heuristics: {}'.format(args.heuristic, HEURISTICS))
@@ -62,3 +68,30 @@ def sequence(args: argparse.Namespace,
     """Intervene sequentially on all nodes."""
     
     return epoch % gamma.shape[0]
+
+
+def children(args: argparse.Namespace,
+             gamma: torch.Tensor,
+             theta: torch.Tensor) -> int:
+    "Intervene on node with the most uncertain children."
+    
+    probs = torch.sigmoid(args.temperature * gamma * theta) 
+    certainty = probs * (1-probs)
+    
+    int_idx = torch.multinomial(torch.sum(certainty, 1), num_samples=1)
+    
+    return int_idx
+    
+  
+def parents(args: argparse.Namespace,
+            gamma: torch.Tensor,
+            theta: torch.Tensor) -> int:
+    "Intervene on node with the most uncertain parents."
+    
+    probs = torch.sigmoid(args.temperature * gamma * theta) 
+    certainty = probs * (1-probs)
+    
+    int_idx = torch.multinomial(torch.sum(certainty, 2), num_samples=1)
+    
+    return int_idx
+    
