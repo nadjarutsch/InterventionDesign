@@ -55,7 +55,7 @@ class GraphUpdate(object):
               model, 
               only_theta, 
               mirror_graphs=False, 
-              C_s=200):
+              C_s=20):
 
         adj_matrices = []
         logregret = []

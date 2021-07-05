@@ -2,11 +2,13 @@ import gym
 from gym import spaces
 import numpy as np
 import torch
+from typing import Tuple
 
 from causal_graphs.graph_generation import generate_categorical_graph, get_graph_func
-from causal_graphs.graph_visualization import visualize_graph
+#from causal_graphs.graph_visualization import visualize_graph
 from causal_graphs.variable_distributions import _random_categ
 from datasets import GraphData
+from visualize import DrawGraph
 
 
 
@@ -47,7 +49,11 @@ class CausalEnv(gym.Env):
         # possible values (0-1) in adjacency matrix (box space)
         self.observation_space = spaces.Discrete(1)
         
-    def step(self, action_idx, num_samples):
+        self.visualization = None
+        
+    def step(self, 
+             action_idx: int, 
+             num_samples: int) -> Tuple[GraphData, int, dict]:
         
         # Perform intervention, sample from interventional SCM     
         var = self.dag.variables[action_idx]
@@ -73,9 +79,14 @@ class CausalEnv(gym.Env):
         dataset = GraphData(graph=self.dag, dataset_size=n_samples)  
         return dataset
     
-    def render(self, mode='human', close=False):
+    def render(self, gamma, theta, mode='human', title=None, close=False):
         # Render the environment to the screen
-        pass
+        
+        if self.visualization == None:
+            self.visualization = DrawGraph(len(self.dag.variables), gamma, theta)
+    
+   #     if self.current_step > LOOKBACK_WINDOW_SIZE:        
+    #        self.visualization.render(self.current_step, gamma, theta, window_size=LOOKBACK_WINDOW_SIZE)
     
     def close(self):
         pass
