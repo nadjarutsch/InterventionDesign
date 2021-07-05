@@ -59,7 +59,8 @@ def main(args: argparse.Namespace):
     updateModule = GraphUpdate(gamma,
                                theta,
                                gamma_optimizer,
-                               theta_optimizer)
+                               theta_optimizer,
+                               lambda_sparse=args.lambda_sparse)
     
     date = datetime.today().strftime('%Y-%m-%d')
     suffix = args.graph_structure + "-" + args.heuristic + datetime.today().strftime('-%H-%M')
@@ -266,7 +267,7 @@ if __name__ == '__main__':
     # Graph fitting (interventional data)
     parser.add_argument('--int_batch_size', default=64, type=int, help='Batch size used for scoring based on interventional data')
     parser.add_argument('--int_epochs', default=100, type=int, help='Number of epochs for updating the graph gamma and theta parameters of the graph')
-    
+    parser.add_argument('--lambda_sparse', default=0.001, type=float, help='Threshold for interpreting an edge as beneficial')
 
     args: argparse.Namespace = parser.parse_args()
 
