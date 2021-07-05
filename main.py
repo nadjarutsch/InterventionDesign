@@ -71,6 +71,7 @@ def main(args: argparse.Namespace):
     shd_rel_lst = []
     
     #env.render(gamma.detach(), theta.detach())
+    stop_count = 0 # for early stopping
     
     # causal discovery training loop
     for epoch in track(range(args.max_interventions), leave=False, desc="Epoch loop"):
@@ -96,12 +97,22 @@ def main(args: argparse.Namespace):
         
         writer.add_scalar('SHD', shd, global_step=epoch)
         writer.add_scalar('SHD relative', shd_rel, global_step=epoch)
+        writer.add_scalar('Intervention variable', int_idx, global_step=epoch)
         
-        # stop early
+        # stop early if SHD is 0 for 3 epochs
         if shd == 0:
-            writer.add_scalar('Mean SHD relative', sum(shd_rel_lst) / len(shd_rel_lst))
-            writer.add_scalar('Interventions needed', epoch)
+            stop_count += 1
+        else:
+            stop_count = 0
+            
+        if stop_count == 3:
+            writer.add_scalar('Interventions needed', epoch-2)
+            writer.add_scalar('Mean SHD relative', np.mean(shd_rel_lst))
             break
+        
+        if epoch == args.max_interventions:
+            writer.add_scalar('Interventions needed', epoch+1-stop_count)
+            writer.add_scalar('Mean SHD relative', np.mean(shd_rel_lst))
 
 
    
