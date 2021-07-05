@@ -2,51 +2,57 @@ import torch
 import numpy as np
 import argparse
 
-HEURISTICS = ['uniform', 'uncertain', 'sequence', 'children', 'parents']
 
-
-def choose_intervention(args: argparse.Namespace, epoch: int, gamma: torch.Tensor, theta: torch.Tensor) -> int:
+def choose_intervention(args: argparse.Namespace, 
+                        epoch: int, 
+                        gamma: torch.Tensor, 
+                        theta: torch.Tensor) -> int:
     """Chooses a node for intervention.
     
     Args:
-        gamma_matrix: Tensor of shape (n_nodes, n_nodes) with gamma-parameters,
-            representing the edge probabilities.
+        args: Object from the argument parser that include the heuristic and
+            temperature value.
+        epoch: Current epoch (used for sequence heuristic).
+        gamma: Tensor of shape (n_nodes, n_nodes) of gamma values (determining 
+            edge probabilities).
+        theta: Tensor of shape (n_nodes, n_nodes) of theta values (determining 
+            edge directions).
 
     Returns:
         Index of the node to be intervened on.
-        
-    Raises:
-        Exception: If heuristic is not available.
     """    
-    if args.heuristic == HEURISTICS[0]:
+    if args.heuristic == 'uniform':
         return uniform(gamma)
     
-    elif args.heuristic == HEURISTICS[1]:
-        return uncertain(args, gamma, theta) 
+    elif args.heuristic == 'uncertain incoming':
+        return uncertain_in(args, gamma, theta) 
     
-    elif args.heuristic == HEURISTICS[2]:
+    elif args.heuristic == 'uncertain outgoing':
+        return uncertain_out(args, gamma, theta) 
+    
+    elif args.heuristic == 'sequence':
         return sequence(args, epoch, gamma, theta) 
     
-    elif args.heuristic == HEURISTICS[3]:
-        return children(args, gamma, theta) 
+    elif args.heuristic == 'uncertain children':
+        return uncertain_children(args, gamma, theta) 
     
-    elif args.heuristic == HEURISTICS[4]:
-        return parents(args, gamma, theta) 
+    elif args.heuristic == 'uncertain parents':
+        return uncertain_parents(args, gamma, theta) 
     
-    else:
-        raise Exception('Heuristic is not available. \n Chosen heuristic: {} \n Available heuristics: {}'.format(args.heuristic, HEURISTICS))
+    elif args.heuristic == 'uncertain neighbours':
+        return uncertain_neighbours(args, gamma, theta) 
 
 
 def uniform(gamma: torch.Tensor) -> int:
-    """Samples an intervention node uniformly from all nodes."""
+    """Samples an intervention node uniformly from all nodes (baseline)."""
     
     return np.random.randint(gamma.shape[-1])
 
 
-def uncertain(args: argparse.Namespace,
+def uncertain_out(args: argparse.Namespace,
               gamma: torch.Tensor, 
               theta: torch.Tensor) -> int:
-    """Chooses the intervention node with the most uncertain outgoing edge."""
+    """More likely to intervene on nodes with highly uncertain outgoing edge."""
     
     probs = torch.sigmoid(args.temperature * gamma * theta) 
     certainty = probs * (1-probs)
@@ -56,42 +62,86 @@ def uncertain(args: argparse.Namespace,
     
     int_idx = torch.multinomial(certainty.flatten(), num_samples=1)
     
-    # TODO: check if [0] really returns the node with the most uncertain 
     # outgoing edge
     return np.unravel_index(int_idx, gamma.shape)[0][0]
+
+
+def uncertain_in(args: argparse.Namespace,
+              gamma: torch.Tensor, 
+              theta: torch.Tensor) -> int:
+    """More likely to intervene on nodes with highly uncertain incoming edge."""
+    
+    probs = torch.sigmoid(args.temperature * gamma * theta) 
+    certainty = probs * (1-probs)
+    
+    # don't sample variables based on self-cycle edges
+    certainty.fill_diagonal_(0)
+    
+    int_idx = torch.multinomial(certainty.flatten(), num_samples=1)    
+
+    return np.unravel_index(int_idx, gamma.shape)[1][0]
 
 
 def sequence(args: argparse.Namespace,
              epoch: int,
              gamma: torch.Tensor, 
              theta: torch.Tensor) -> int:
-    """Intervene sequentially on all nodes."""
+    """Intervene sequentially on all nodes (baseline)."""
     
     return epoch % gamma.shape[0]
 
 
-def children(args: argparse.Namespace,
+def uncertain_children(args: argparse.Namespace,
              gamma: torch.Tensor,
              theta: torch.Tensor) -> int:
-    "Intervene on node with the most uncertain children."
+    """More likely to intervene on nodes where the sum of the uncertainty of 
+    outgoing edges is high."""
     
     probs = torch.sigmoid(args.temperature * gamma * theta) 
     certainty = probs * (1-probs)
+    
+    # don't sample variables based on self-cycle edges
+    certainty.fill_diagonal_(0)
     
     int_idx = torch.multinomial(torch.sum(certainty, 1), num_samples=1)
     
     return int_idx
     
   
-def parents(args: argparse.Namespace,
+def uncertain_parents(args: argparse.Namespace,
             gamma: torch.Tensor,
             theta: torch.Tensor) -> int:
-    "Intervene on node with the most uncertain parents."
+    """More likely to intervene on nodes where the sum of the uncertainty of 
+    incoming edges is high."""
     
     probs = torch.sigmoid(args.temperature * gamma * theta) 
     certainty = probs * (1-probs)
     
-    int_idx = torch.multinomial(torch.sum(certainty, 2), num_samples=1)
+    # don't sample variables based on self-cycle edges
+    certainty.fill_diagonal_(0)
+
+    int_idx = torch.multinomial(torch.sum(certainty, 0), num_samples=1)
+    
+    return int_idx
+
+
+def uncertain_neighbours(args: argparse.Namespace,
+            gamma: torch.Tensor,
+            theta: torch.Tensor) -> int:
+    """More likely to intervene on nodes where the sum of the uncertainty of 
+    incoming and outgoing edges is high."""
+    
+    probs = torch.sigmoid(args.temperature * gamma * theta) 
+    
+    certainty = probs * (1-probs)
+    
+    # don't sample variables based on self-cycle edges
+    certainty.fill_diagonal_(0)
+    
+    incoming = torch.sum(certainty,0)
+    outgoing = torch.sum(certainty,1)
+
+    int_idx = torch.multinomial(incoming + outgoing, num_samples=1)
     
     return int_idx
     
