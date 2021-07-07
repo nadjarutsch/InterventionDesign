@@ -24,22 +24,22 @@ def choose_intervention(args: argparse.Namespace,
     if args.heuristic == 'uniform':
         return uniform(gamma)
     
-    elif args.heuristic == 'uncertain incoming':
+    elif args.heuristic == 'uncertain-incoming':
         return uncertain_in(args, gamma, theta) 
     
-    elif args.heuristic == 'uncertain outgoing':
+    elif args.heuristic == 'uncertain-outgoing':
         return uncertain_out(args, gamma, theta) 
     
     elif args.heuristic == 'sequence':
         return sequence(args, epoch, gamma, theta) 
     
-    elif args.heuristic == 'uncertain children':
+    elif args.heuristic == 'uncertain-children':
         return uncertain_children(args, gamma, theta) 
     
-    elif args.heuristic == 'uncertain parents':
+    elif args.heuristic == 'uncertain-parents':
         return uncertain_parents(args, gamma, theta) 
     
-    elif args.heuristic == 'uncertain neighbours':
+    elif args.heuristic == 'uncertain-neighbours':
         return uncertain_neighbours(args, gamma, theta) 
 
 

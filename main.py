@@ -266,7 +266,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_int_samples', default=1000, type=int, help='Number of samples from one intervention')
     parser.add_argument('--max_interventions', default=40, type=int, help='Maximum number of interventions')
     parser.add_argument('--graph_structure', choices=['random', 'jungle', 'chain', 'bidiag', 'collider', 'full', 'regular'], default='collider', help='Structure of the true causal graph')
-    parser.add_argument('--heuristic', choices=['uniform', 'uncertain incoming', 'uncertain outgoing', 'sequence', 'uncertain children', 'uncertain parents', 'uncertain neighbours'], default='uncertain incoming', help='Heuristic used for choosing intervention nodes')
+    parser.add_argument('--heuristic', choices=['uniform', 'uncertain-incoming', 'uncertain-outgoing', 'sequence', 'uncertain-children', 'uncertain-parents', 'uncertain-neighbours'], default='uncertain-incoming', help='Heuristic used for choosing intervention nodes')
     parser.add_argument('--temperature', default=10.0, type=float, help='Temperature used for sampling the intervention variable')
     parser.add_argument('--full_test', default=True, type=bool, help='Full test run for comparison of all heuristics (fixed graphs)')
 
