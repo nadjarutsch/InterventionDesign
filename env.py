@@ -9,6 +9,7 @@ from causal_graphs.graph_generation import generate_categorical_graph, get_graph
 from causal_graphs.variable_distributions import _random_categ
 from datasets import GraphData
 from visualize import DrawGraph
+from causal_graphs.graph_definition import CausalDAG
 
 
 
@@ -27,19 +28,23 @@ class CausalEnv(gym.Env):
                  num_vars: int, 
                  min_categs: int,
                  max_categs: int,
-                 graph_structure: str = 'random'):
+                 graph_structure: str='random',
+                 dag: CausalDAG=None):
         """Inits an instance of the environment with the given attributes."""
         
         super(CausalEnv, self).__init__()
         
         # Sample an underlying DAG
-        self.dag = generate_categorical_graph(num_vars=num_vars,
-                                              min_categs=min_categs,
-                                              max_categs=max_categs,
-                                              connected=True,
-                                              graph_func=get_graph_func(graph_structure),
-                                              edge_prob=0.4,
-                                              use_nn=True)
+        if dag is None:
+            self.dag = generate_categorical_graph(num_vars=num_vars,
+                                                  min_categs=min_categs,
+                                                  max_categs=max_categs,
+                                                  connected=True,
+                                                  graph_func=get_graph_func(graph_structure),
+                                                  edge_prob=0.4,
+                                                  use_nn=True)
+        else:
+            self.dag = dag   
         
         # One action is an intervention on one node (sparse interventions)
         self.action_space = spaces.Discrete(num_vars)

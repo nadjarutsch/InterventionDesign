@@ -13,15 +13,18 @@ from causal_discovery.multivariable_mlp import create_model, MultivarMLP
 from experiments.utils import track
 from causal_discovery.graph_fitting import GraphFitting
 from DAG_matrix.adam_theta import AdamTheta
+from causal_graphs.graph_generation import generate_categorical_graph, get_graph_func
+from causal_graphs.graph_definition import CausalDAG
 
 from metrics import SHD
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
+from collections import defaultdict
 
 
 
     
-def main(args: argparse.Namespace):
+def main(args: argparse.Namespace, dag: CausalDAG=None):
     """Executes a causal discovery algorithm on synthetic data from a sampled
     DAG, using a specified heuristic for choosing intervention variables.
     
@@ -47,7 +50,8 @@ def main(args: argparse.Namespace):
     env = CausalEnv(num_vars=args.num_variables, 
                     min_categs=args.min_categories,
                     max_categs=args.max_categories,
-                    graph_structure=args.graph_structure)
+                    graph_structure=args.graph_structure,
+                    dag=dag)
     obs_data = env.reset(n_samples=args.n_obs_samples)
     obs_dataloader = DataLoader(obs_data, batch_size=args.obs_batch_size, shuffle=True, drop_last=True)
     
@@ -261,7 +265,7 @@ if __name__ == '__main__':
     parser.add_argument('--graph_structure', choices=['random', 'jungle', 'chain', 'bidiag', 'collider', 'full', 'regular'], default='collider', help='Structure of the true causal graph')
     parser.add_argument('--heuristic', choices=['uniform', 'uncertain incoming', 'uncertain outgoing', 'sequence', 'uncertain children', 'uncertain parents', 'uncertain neighbours'], default='uncertain incoming', help='Heuristic used for choosing intervention nodes')
     parser.add_argument('--temperature', default=10.0, type=float, help='Temperature used for sampling the intervention variable')
-    
+    parser.add_argument('--full_test', default=True, type=bool, help='Full test run for comparison of all heuristics (fixed graphs)')
 
     # Distribution fitting (observational data)
     parser.add_argument('--obs_batch_size', default=128, type=int, help='Batch size used for fitting the graph to observational data')
@@ -282,5 +286,27 @@ if __name__ == '__main__':
 
     args: argparse.Namespace = parser.parse_args()
 
-    # run main loop
-    main(args)
+    # test runs to compare different heuristics on on the same graphs
+    if args.full_test:
+        dags = defaultdict(list)
+        for structure in ['jungle', 'chain', 'bidiag', 'collider', 'full', 'regular']:
+            for i in range(5):
+                dags[structure].append(generate_categorical_graph(num_vars=args.num_variables,
+                                                                  min_categs=args.min_categories,
+                                                                  max_categs=args.max_categories,
+                                                                  connected=True,
+                                                                  graph_func=get_graph_func(structure),
+                                                                  edge_prob=0.4,
+                                                                  use_nn=True))
+                
+        
+        for structure in ['jungle', 'chain', 'bidiag', 'collider', 'full', 'regular']:
+            args.graph_structure = structure # for logging
+            for dag in dags[structure]:
+                for heuristic in ['uniform', 'uncertain incoming', 'uncertain outgoing', 'sequence', 'uncertain children', 'uncertain parents', 'uncertain neighbours']:
+                    args.heuristic = heuristic # for logging
+                    main(args, dag)
+    
+    # single run 
+    else:
+        main(args)
