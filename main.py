@@ -83,7 +83,10 @@ def main(args: argparse.Namespace, dag: CausalDAG=None):
         distributionFitting, loss = obs_step(args, distributionFitting, updateModule.gamma, updateModule.theta, obs_dataloader)
         
         # perform intervention and update parameters based on interventional data
-        int_idx = choose_intervention(args, epoch, gamma=updateModule.gamma.detach(), theta=updateModule.theta.detach())
+        if epoch == 0: # always start with the same variable
+            int_idx = 0
+        else:
+            int_idx = choose_intervention(args, epoch, gamma=updateModule.gamma.detach(), theta=updateModule.theta.detach())
         int_data, reward, info = env.step(int_idx, args.n_int_samples) 
         int_dataloader = DataLoader(int_data, batch_size=args.int_batch_size, shuffle=True, drop_last=True)
        
@@ -261,7 +264,7 @@ if __name__ == '__main__':
     parser.add_argument('--max_categories', default=10, type=int, help='Maximum number of categories of a causal variable')
     parser.add_argument('--n_obs_samples', default=10000, type=int, help='Number of observational samples from the joint distribution of a synthetic graph')
     parser.add_argument('--n_int_samples', default=1000, type=int, help='Number of samples from one intervention')
-    parser.add_argument('--max_interventions', default=30, type=int, help='Maximum number of interventions')
+    parser.add_argument('--max_interventions', default=40, type=int, help='Maximum number of interventions')
     parser.add_argument('--graph_structure', choices=['random', 'jungle', 'chain', 'bidiag', 'collider', 'full', 'regular'], default='collider', help='Structure of the true causal graph')
     parser.add_argument('--heuristic', choices=['uniform', 'uncertain incoming', 'uncertain outgoing', 'sequence', 'uncertain children', 'uncertain parents', 'uncertain neighbours'], default='uncertain incoming', help='Heuristic used for choosing intervention nodes')
     parser.add_argument('--temperature', default=10.0, type=float, help='Temperature used for sampling the intervention variable')
@@ -286,7 +289,7 @@ if __name__ == '__main__':
 
     args: argparse.Namespace = parser.parse_args()
 
-    # test runs to compare different heuristics on on the same graphs
+    # test runs to compare different heuristics on the same graphs
     if args.full_test:
         dags = defaultdict(list)
         for structure in ['jungle', 'chain', 'bidiag', 'collider', 'full', 'regular']:
