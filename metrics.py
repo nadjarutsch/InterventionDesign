@@ -38,6 +38,20 @@ from sklearn.metrics import auc, precision_recall_curve
 #from .utils.R import launch_R_script, RPackages
 
 
+
+
+
+def kl_divergence(int_stats, unif_prob):
+    """KL Divergence between distribution over intervention variables and 
+    uniform distribution"""
+    num_ints = sum(int_stats.values())
+    kl = 0
+    for key, value in int_stats.items():
+        int_prob = value / num_ints
+        kl += int_prob * np.log(int_prob / unif_prob)
+    return kl
+
+
 def retrieve_adjacency_matrix(graph, order_nodes=None, weight=False):
     """Retrieve the adjacency matrix from the nx.DiGraph or numpy array."""
     if isinstance(graph, np.ndarray):
