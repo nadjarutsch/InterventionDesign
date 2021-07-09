@@ -14,13 +14,15 @@ from causal_graphs.graph_definition import CausalDAG
 
 
 class CausalEnv(gym.Env):
-    """Environment based on a sampled Directed Acyclic Graph (DAG).
+    """Environment based on a sampled or given Directed Acyclic Graph (DAG).
     
     Attributes:
         num_vars: Number of variables of the sampled DAG.
         min_categs: Minimum number of categories of each causal variable.
         max_categs: Maximum number of categories of each causal variable.
         graph_structure: Structure of the sampled DAG.
+        edge_prob: Initial edge likelihood.
+        dag: DAG for data sampling; if given, no DAG will be generated.
     """
     metadata = {'render.modes': ['human']}
   
@@ -29,6 +31,7 @@ class CausalEnv(gym.Env):
                  min_categs: int,
                  max_categs: int,
                  graph_structure: str='random',
+                 edge_prob: float=0.3,
                  dag: CausalDAG=None):
         """Inits an instance of the environment with the given attributes."""
         
@@ -41,7 +44,7 @@ class CausalEnv(gym.Env):
                                                   max_categs=max_categs,
                                                   connected=True,
                                                   graph_func=get_graph_func(graph_structure),
-                                                  edge_prob=0.4,
+                                                  edge_prob=edge_prob,
                                                   use_nn=True)
         else:
             self.dag = dag   
@@ -75,8 +78,8 @@ class CausalEnv(gym.Env):
         int_data = GraphData(data=torch.from_numpy(int_data)) 
 
         
-        reward = -1 # incentivice agent to perform as few interventions as possible
-        info = {} # TODO: do I want to use this?
+        reward = -1 * num_samples # incentivice agent to perform as few interventions as possible
+        info = {}
         
         return int_data, reward, info
     
