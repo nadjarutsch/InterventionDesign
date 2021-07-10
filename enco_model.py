@@ -310,8 +310,5 @@ class AdjacencyMatrix(object):
         A = (self.gamma > 0.0) * (self.theta > 0.0)
         return (A).cpu()
     
-    @property
-    def num_variables(self):
-        return self.num_variables
     
     

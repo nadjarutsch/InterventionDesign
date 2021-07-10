@@ -36,6 +36,51 @@ import networkx as nx
 from shutil import rmtree
 from sklearn.metrics import auc, precision_recall_curve
 #from .utils.R import launch_R_script, RPackages
+import torch
+
+
+
+
+def get_metrics(pred_adjmatrix, true_adjmatrix):
+    binary_gamma = pred_adjmatrix.binary
+    false_positives = torch.logical_and(binary_gamma, ~true_adjmatrix)
+    false_negatives = torch.logical_and(~binary_gamma, true_adjmatrix)
+    TP = torch.logical_and(binary_gamma, true_adjmatrix).float().sum().item()
+    TN = torch.logical_and(~binary_gamma, ~true_adjmatrix).float().sum().item()
+    FP = false_positives.float().sum().item()
+    FN = false_negatives.float().sum().item()
+    TN = TN - pred_adjmatrix.num_variables # Remove diagonal as it is not being predicted
+
+    recall = TP / max(TP + FN, 1e-5)
+    precision = TP / max(TP + FP, 1e-5)
+
+    # Get details on False Positives
+ #   FP_elems = torch.where(torch.logical_and(binary_gamma, ~true_adjmatrix))
+  #  FP_relations = self.true_node_relations[FP_elems]
+   # FP_dict = {
+    #    "ancestors": (FP_relations == -1).sum().item(), # i->j => j is a child of i
+     #   "descendants": (FP_relations == 1).sum().item(),
+      #  "confounders": (FP_relations == 2).sum().item(),
+       # "independents": (FP_relations == 0).sum().item() 
+  #  }
+
+ #   rev = torch.logical_and(binary_gamma, true_adjmatrix.T)
+  #  num_revs = rev.float().sum().item()
+ #   SHD = (false_positives + false_negatives + rev + rev.T).float().sum().item() - num_revs
+
+    metrics = {
+        "TP": int(TP),
+        "TN": int(TN),
+        "FP": int(FP),
+        "FN": int(FN),
+#        "SHD": int(SHD),
+ #       "reverse": int(num_revs),
+        "recall": recall,
+        "precision": precision,
+#        "FP_details": FP_dict
+    }
+    return metrics
+
 
 
 

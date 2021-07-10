@@ -60,7 +60,7 @@ def uncertain_out(args: argparse.Namespace,
     int_idx = torch.multinomial(uncertainty.flatten(), num_samples=1)
     
     # outgoing edge
-    return np.unravel_index(int_idx, adj_matrix.num_variables)[0][0]
+    return np.unravel_index(int_idx, (adj_matrix.num_variables, adj_matrix.num_variables))[0][0]
 
 
 def sequence(epoch: int,

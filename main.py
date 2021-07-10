@@ -3,6 +3,7 @@ from heuristics import choose_intervention
 from graph_update import GraphUpdate 
 from metrics import SHD
 from metrics import kl_divergence
+from metrics import get_metrics
 
 import numpy as np
 import argparse
@@ -86,15 +87,20 @@ def main(args: argparse.Namespace, dag: CausalDAG=None):
         distributionFitting, loss = obs_step(args, distributionFitting, updateModule.gamma, updateModule.theta, obs_dataloader)      
        
         # graph fitting
-        updateModule = int_step(args, updateModule, distributionFitting.model, env, epoch)
+        updateModule = int_step(args, adj_matrix, updateModule, distributionFitting.model, env, epoch)
         
         # logging
-        shd, shd_rel = eval_model(updateModule.gamma, updateModule.theta, env, shd)
+        shd, shd_rel = eval_model(adj_matrix, env, shd)
         kl = kl_divergence(updateModule.stats, 1 / args.num_variables)
+        metrics = get_metrics(adj_matrix, torch.from_numpy(env.dag.adj_matrix))
         
         writer.add_scalar('SHD', shd, global_step=epoch+1)
         writer.add_scalar('SHD relative', shd_rel, global_step=epoch)
         writer.add_scalar('KL Divergence Intervention variables / Uniform', kl, global_step=epoch)
+        writer.add_scalar('Precision', metrics['precision'], global_step=epoch)
+        writer.add_scalar('Recall', metrics['recall'], global_step=epoch)
+        writer.add_scalar('False positives', metrics['FP'], global_step=epoch)
+        writer.add_scalar('False negatives', metrics['FN'], global_step=epoch)
         
         # stop early if SHD is 0 for 3 epochs
         if shd == 0:
@@ -136,7 +142,7 @@ def init_model(args: argparse.Namespace) -> Tuple[MultivarMLP, AdjacencyMatrix]:
             print("Data parallel activated. Using %i GPUs" % torch.cuda.device_count())
             model = nn.DataParallel(model)
     
-    adj_matrix = AdjacenyMatrix(args.num_variables)
+    adj_matrix = AdjacencyMatrix(args.num_variables)
     
     return model, adj_matrix
 
@@ -182,6 +188,7 @@ def obs_step(args: argparse.Namespace,
 
 
 def int_step(args: argparse.Namespace,
+             adj_matrix: AdjacencyMatrix,
              updateModule: GraphUpdate,
              model: MultivarMLP,
              env: CausalEnv,
@@ -210,7 +217,7 @@ def int_step(args: argparse.Namespace,
             int_idx = 0
         else:
             true_adj_matrix = torch.from_numpy(env.dag.adj_matrix).float()
-            int_idx = choose_intervention(args, epoch, gamma=updateModule.gamma.detach(), theta=updateModule.theta.detach(), true_adj=true_adj_matrix)
+            int_idx = choose_intervention(args, epoch, adj_matrix=adj_matrix, true_adj=true_adj_matrix)
         updateModule.stats[int_idx] += 1
         int_data, reward, info = env.step(int_idx, args.int_batch_size) 
         int_dataloader = DataLoader(int_data, batch_size=args.int_batch_size, shuffle=True, drop_last=True)
