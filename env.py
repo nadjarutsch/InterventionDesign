@@ -5,7 +5,6 @@ import torch
 from typing import Tuple
 
 from causal_graphs.graph_generation import generate_categorical_graph, get_graph_func
-#from causal_graphs.graph_visualization import visualize_graph
 from causal_graphs.variable_distributions import _random_categ
 from datasets import GraphData
 from visualize import DrawGraph

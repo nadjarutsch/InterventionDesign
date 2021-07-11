@@ -5,7 +5,6 @@ import torch.nn.functional as F
 from copy import copy
 import sys
 sys.path.append("../")
-from causal_discovery.model_utils import get_device
 
 
 class ProbDist(object):
@@ -347,3 +346,6 @@ def get_random_gaussian(input_names, num_coeff=4, **kwargs):
 		sigma_func = lambda inputs: sigma
 
 	return GaussianDist(mu_func, sigma_func, **kwargs)
+
+def get_device():
+	return torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
