@@ -176,12 +176,13 @@ if __name__ == '__main__':
                                                                   use_nn=True))
             
             args.graph_structure = structure # for logging
-            for dag in dags[structure]:
-                for heuristic in ['uniform', 'uncertain-outgoing', 'sequence', 'uncertain-children', 'uncertain-neighbours', 'true-distance']:
-                    args.heuristic = heuristic # for logging
+            for heuristic in ['uniform', 'uncertain-outgoing', 'sequence', 'uncertain-children', 'uncertain-neighbours', 'true-distance']:
+                args.heuristic = heuristic # for logging               
+                for dag in dags[structure]:
                     main(args, dag)
-            
+  
     
+  
     # single run 
     else:
         main(args)
