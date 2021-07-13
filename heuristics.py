@@ -82,7 +82,7 @@ def uncertain_children(args: argparse.Namespace,
     
     int_idx = torch.multinomial(torch.sum(uncertainty, 1), num_samples=1)
     
-    return int_idx
+    return int_idx.item()
     
 
 def uncertain_neighbours(args: argparse.Namespace,
@@ -100,7 +100,7 @@ def uncertain_neighbours(args: argparse.Namespace,
 
     int_idx = torch.multinomial(incoming + outgoing, num_samples=1)
     
-    return int_idx
+    return int_idx.item()
 
 
 def true_distance(true_adj: torch.Tensor, 

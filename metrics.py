@@ -27,10 +27,10 @@ class Logger(object):
     
     def on_epoch_end(self, adjmatrix_pred, adjmatrix_target, epoch):
         metrics = get_metrics(adjmatrix_pred, adjmatrix_target)
-        kl = kl_divergence(self.stats, 1 / adjmatrix_pred.num_variables)
+        chi = chi_square(self.stats, adjmatrix_pred.num_variables)
         
         self.writer.add_scalar('SHD', metrics['SHD'], global_step=epoch+1)
-        self.writer.add_scalar('KL Divergence Intervention variables / Uniform', kl, global_step=epoch)
+        self.writer.add_scalar('Chi-Square value vs. uniform', chi, global_step=epoch)
         self.writer.add_scalar('Precision', metrics['precision'], global_step=epoch+1)
         self.writer.add_scalar('Recall', metrics['recall'], global_step=epoch+1)
         self.writer.add_scalar('False positives', metrics['FP'], global_step=epoch+1)
@@ -95,12 +95,15 @@ def get_metrics(pred_adjmatrix, true_adjmatrix):
 
 
 
-def kl_divergence(int_stats, unif_prob):
-    """KL Divergence between distribution over intervention variables and 
-    uniform distribution"""
-    num_ints = sum(int_stats.values())
-    kl = 0
-    for key, value in int_stats.items():
-        int_prob = value / num_ints
-        kl += int_prob * np.log(int_prob / unif_prob)
-    return kl
+def chi_square(int_stats, num_variables):
+    """Chi-squared test value of distribution over intervention variables compared 
+    to uniform distribution"""
+    
+    N = sum(int_stats.values())
+    chi_square = 0
+    unif_prob = 1 / num_variables
+
+    for i in range(num_variables):
+        chi_square += (int_stats[i] / N - unif_prob)**2 / unif_prob
+        
+    return chi_square * N
