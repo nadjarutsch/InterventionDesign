@@ -184,7 +184,7 @@ def graph_fitting(args: argparse.Namespace,
         if epoch == 0 and i == 0: # always start with the same variable
             int_idx = 0
         else:
-            true_adj_matrix = torch.from_numpy(env.dag.adj_matrix).float()
+            true_adj_matrix = torch.from_numpy(env.dag.adj_matrix).float().to(adj_matrix.gamma.device)
             int_idx = choose_intervention(args, i, adj_matrix=adj_matrix, true_adj=true_adj_matrix)
         logger.stats[int_idx] += 1 
         int_data, reward, info = env.step(int_idx, args.int_batch_size) 

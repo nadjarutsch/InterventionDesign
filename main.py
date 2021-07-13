@@ -111,11 +111,16 @@ def init_model(args: argparse.Namespace) -> Tuple[MultivarMLP, AdjacencyMatrix]:
                          share_embeds=False,
                          actfn='leakyrelu',
                          sparse_embeds=False)
+    
+    
     if args.data_parallel:
+            device = torch.device("cuda:0")
             print("Data parallel activated. Using %i GPUs" % torch.cuda.device_count())
             model = nn.DataParallel(model)
+    else:
+        device = torch.device("cpu")
     
-    adj_matrix = AdjacencyMatrix(args.num_variables)
+    adj_matrix = AdjacencyMatrix(args.num_variables, device)
     
     return model, adj_matrix
 
@@ -130,7 +135,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     # Settings
-    parser.add_argument('--data_parallel', default=False, type=bool, help='Use parallelization for efficiency')
+    parser.add_argument('--data_parallel', default=True, type=bool, help='Use parallelization for efficiency')
     parser.add_argument('--num_variables', default=25, type=int, help='Number of causal variables')
     parser.add_argument('--min_categories', default=2, type=int, help='Minimum number of categories of a causal variable')
     parser.add_argument('--max_categories', default=10, type=int, help='Maximum number of categories of a causal variable')
@@ -165,7 +170,7 @@ if __name__ == '__main__':
     # test runs to compare different heuristics on the same graphs
     if args.full_test:
         dags = defaultdict(list)
-        for structure in ['jungle', 'chain', 'bidiag', 'collider', 'full', 'regular']:
+        for structure in 'jungle', 'chain', 'bidiag', 'collider', 'full', 'regular']:
             for i in range(5):
                 dags[structure].append(generate_categorical_graph(num_vars=args.num_variables,
                                                                   min_categs=args.min_categories,

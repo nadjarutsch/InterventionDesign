@@ -291,12 +291,12 @@ def create_model(num_vars, num_categs, hidden_dims, share_embeds=False, actfn=No
 
 
 class AdjacencyMatrix(object):
-    def __init__(self, num_variables):
+    def __init__(self, num_variables, device):
         super().__init__()
         
-        self.gamma = nn.Parameter(torch.zeros(num_variables, num_variables)) 
+        self.gamma = nn.Parameter(torch.zeros(num_variables, num_variables, device=device)) 
         self.gamma.data[torch.arange(num_variables), torch.arange(num_variables)] = -9e15
-        self.theta = nn.Parameter(torch.zeros(num_variables, num_variables))
+        self.theta = nn.Parameter(torch.zeros(num_variables, num_variables, device=device))
         self.num_variables = num_variables
         
     def edge_probs(self, temperature=1):
