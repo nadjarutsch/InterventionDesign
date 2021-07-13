@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
+import pickle
 
 
 
@@ -15,8 +16,12 @@ class Logger(object):
         self.stop_count = 0
         self.max_epochs = args.epochs
     
-    def before_training(self, adjmatrix_pred, adjmatrix_target):
-        metrics = get_metrics(adjmatrix_pred, adjmatrix_target)
+    def before_training(self, adjmatrix_pred, dag):
+        metrics = get_metrics(adjmatrix_pred, torch.from_numpy(dag.adj_matrix))
+        
+        with open('%s/dag.pkl' % self.writer.log_dir, 'wb') as output:
+            pickle.dump(dag, output, pickle.HIGHEST_PROTOCOL)
+
         self.writer.add_scalar('SHD', metrics['SHD'], global_step=0)
         self.writer.add_scalar('Precision', metrics['precision'], global_step=0)
         self.writer.add_scalar('Recall', metrics['recall'], global_step=0)
