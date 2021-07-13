@@ -170,7 +170,7 @@ if __name__ == '__main__':
     # test runs to compare different heuristics on the same graphs
     if args.full_test:
         dags = defaultdict(list)
-        for structure in 'jungle', 'chain', 'bidiag', 'collider', 'full', 'regular']:
+        for structure in ['jungle', 'chain', 'bidiag', 'collider', 'full', 'regular']:
             for i in range(5):
                 dags[structure].append(generate_categorical_graph(num_vars=args.num_variables,
                                                                   min_categs=args.min_categories,
