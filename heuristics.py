@@ -52,7 +52,7 @@ def uncertain_out(args: argparse.Namespace,
                   adj_matrix: AdjacencyMatrix) -> int:
     """More likely to intervene on nodes with highly uncertain outgoing edge."""
     
-    uncertainty = adj_matrix.uncertainty(temperature=args.temperature)
+    uncertainty = adj_matrix.uncertainty(temperature=args.temperature).cpu()
     
     # don't sample variables based on self-cycle edges
     uncertainty.fill_diagonal_(0)
