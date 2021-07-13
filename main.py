@@ -57,7 +57,7 @@ def main(args: argparse.Namespace, dag: CausalDAG=None):
     
     # initialize Logger
     logger = Logger(args)
-    logger.before_training(adj_matrix, torch.from_numpy(env.dag.adj_matrix))
+    logger.before_training(adj_matrix, env.dag)
     
     #env.render(gamma.detach(), theta.detach())
     
@@ -140,9 +140,9 @@ if __name__ == '__main__':
     parser.add_argument('--min_categories', default=2, type=int, help='Minimum number of categories of a causal variable')
     parser.add_argument('--max_categories', default=10, type=int, help='Maximum number of categories of a causal variable')
     parser.add_argument('--n_obs_samples', default=10000, type=int, help='Number of observational samples from the joint distribution of a synthetic graph')
-    parser.add_argument('--epochs', default=50, type=int, help='Maximum number of interventions')
-    parser.add_argument('--graph_structure', choices=['random', 'jungle', 'chain', 'bidiag', 'collider', 'full', 'regular'], default='collider', help='Structure of the true causal graph')
-    parser.add_argument('--heuristic', choices=['uniform', 'uncertain-outgoing', 'sequence', 'uncertain-children', 'uncertain-neighbours', 'true-distance'], default='sequence', help='Heuristic used for choosing intervention nodes')
+    parser.add_argument('--epochs', default=100, type=int, help='Maximum number of interventions')
+    parser.add_argument('--graph_structure', choices=['random', 'jungle', 'chain', 'bidiag', 'collider', 'full', 'regular'], default='jungle', help='Structure of the true causal graph')
+    parser.add_argument('--heuristic', choices=['uniform', 'uncertain-outgoing', 'sequence', 'uncertain-children', 'uncertain-neighbours', 'true-distance'], default='true-distance', help='Heuristic used for choosing intervention nodes')
     parser.add_argument('--temperature', default=10.0, type=float, help='Temperature used for sampling the intervention variable')
     parser.add_argument('--full_test', default=True, type=bool, help='Full test run for comparison of all heuristics (fixed graphs)')
 
@@ -162,8 +162,8 @@ if __name__ == '__main__':
     # Graph fitting (interventional data)
     parser.add_argument('--int_batch_size', default=128, type=int, help='Number of samples per intervention')
     parser.add_argument('--int_epochs', default=100, type=int, help='Number of epochs for updating the graph gamma and theta parameters of the graph')
-    parser.add_argument('--lambda_sparse', default=0.004, type=float, help='Threshold for interpreting an edge as beneficial')
-    parser.add_argument('--edge_prob', default=0.3, help='Initial edge likelihood')
+    parser.add_argument('--lambda_sparse', default=0.001, type=float, help='Threshold for interpreting an edge as beneficial')
+    parser.add_argument('--edge_prob', default=0.4, help='Initial edge likelihood')
 
     args: argparse.Namespace = parser.parse_args()
 
