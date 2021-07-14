@@ -9,6 +9,8 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from typing import Tuple
 from collections import defaultdict
+import json
+from datetime import datetime
 
 from utils import track
 from causal_graphs.graph_generation import generate_categorical_graph, get_graph_func
@@ -32,13 +34,8 @@ def main(args: argparse.Namespace, dag: CausalDAG=None):
     model, adj_matrix = init_model(args)
     
     # initialize optimizers
-    model_optimizer = torch.optim.Adam(model.parameters(), lr=args.lr_model, betas=args.betas_model)
-    
-    if args.betas_gamma[1] > 0:
-        gamma_optimizer = torch.optim.Adam([adj_matrix.gamma], lr=args.lr_gamma, betas=args.betas_gamma)
-    else:
-        gamma_optimizer = torch.optim.SGD([adj_matrix.gamma], lr=args.lr_gamma, momentum=args.betas_gamma[0])
-
+    model_optimizer = torch.optim.Adam(model.parameters(), lr=args.lr_model, betas=args.betas_model)   
+    gamma_optimizer = torch.optim.Adam([adj_matrix.gamma], lr=args.lr_gamma, betas=args.betas_gamma)    
     theta_optimizer = AdamTheta(adj_matrix.theta, lr=args.lr_theta, beta1=args.betas_theta[0], beta2=args.betas_theta[1])
     
     # initialize the environment: create a graph and generate observational 
@@ -107,7 +104,7 @@ def init_model(args: argparse.Namespace) -> Tuple[MultivarMLP, AdjacencyMatrix]:
     """
     model = create_model(num_vars=args.num_variables, 
                          num_categs=args.max_categories, 
-                         hidden_dims=[32], 
+                         hidden_dims=args.hidden_dims, 
                          share_embeds=False,
                          actfn='leakyrelu',
                          sparse_embeds=False)
@@ -145,31 +142,35 @@ if __name__ == '__main__':
     parser.add_argument('--heuristic', choices=['uniform', 'uncertain-outgoing', 'sequence', 'uncertain-children', 'uncertain-neighbours', 'true-distance'], default='true-distance', help='Heuristic used for choosing intervention nodes')
     parser.add_argument('--temperature', default=10.0, type=float, help='Temperature used for sampling the intervention variable')
     parser.add_argument('--full_test', default=True, type=bool, help='Full test run for comparison of all heuristics (fixed graphs)')
+    parser.add_argument('--edge_prob', default=0.4, help='Edge likelihood for generating a graph') # currently not used (overwritten by structure)
 
     # Distribution fitting (observational data)
     parser.add_argument('--obs_batch_size', default=128, type=int, help='Batch size used for fitting the graph to observational data')
-    parser.add_argument('--obs_epochs', default=100, type=int, help='Number of epochs for fitting the causal structure to observational data')
-    
+    parser.add_argument('--obs_epochs', default=1000, type=int, help='Number of epochs for fitting the causal structure to observational data')
+    parser.add_argument('--hidden_dims', default=[64], type=list, nargs='+', help='Number of hidden units in each layer of the Multivariable MLP')
     
     # Optimizers
     parser.add_argument('--lr_model', default=2e-2, type=float, help='Learning rate for fitting the model to observational data')
     parser.add_argument('--betas_model', default=(0.9,0.999), type=tuple, help='Betas used for Adam optimizer (model fitting)')
     parser.add_argument('--lr_gamma', default=2e-2, type=float, help='Learning rate for updating gamma parameters')
-    parser.add_argument('--betas_gamma', default=(0.1,0.1), type=tuple, help='Betas used for Adam optimizer OR momentum used for SGD (gamma update)')
+    parser.add_argument('--betas_gamma', default=(0.9,0.9), type=tuple, help='Betas used for Adam optimizer OR momentum used for SGD (gamma update)')
     parser.add_argument('--lr_theta', default=1e-1, type=float, help='Learning rate for updating theta parameters')
     parser.add_argument('--betas_theta', default=(0.9,0.999), type=tuple, help='Betas used for Adam Theta optimizer (theta update)')
     
     # Graph fitting (interventional data)
     parser.add_argument('--int_batch_size', default=128, type=int, help='Number of samples per intervention')
     parser.add_argument('--int_epochs', default=100, type=int, help='Number of epochs for updating the graph gamma and theta parameters of the graph')
-    parser.add_argument('--lambda_sparse', default=0.001, type=float, help='Threshold for interpreting an edge as beneficial')
-    parser.add_argument('--edge_prob', default=0.4, help='Initial edge likelihood')
+    parser.add_argument('--lambda_sparse', default=0.004, type=float, help='Threshold for interpreting an edge as beneficial')
+    parser.add_argument('--K', default=100, help='Number of graph samples for gradient estimation')
 
     args: argparse.Namespace = parser.parse_args()
 
     # test runs to compare different heuristics on the same graphs
     if args.full_test:
         dags = defaultdict(list)
+        argparse_dict = vars(args)
+        with open(datetime.today().strftime('tb_logs/%Y-%m-%d-%H-%M-hparams.json'), 'w') as fp:
+            json.dump(argparse_dict, fp)
         for structure in ['jungle', 'chain', 'bidiag', 'collider', 'full', 'regular']:
             for i in range(5):
                 dags[structure].append(generate_categorical_graph(num_vars=args.num_variables,
@@ -180,10 +181,10 @@ if __name__ == '__main__':
                                                                   edge_prob=args.edge_prob,
                                                                   use_nn=True))
             
-            args.graph_structure = structure # for logging
             for heuristic in ['uniform', 'uncertain-outgoing', 'sequence', 'uncertain-children', 'uncertain-neighbours', 'true-distance']:
-                args.heuristic = heuristic # for logging               
-                for dag in dags[structure]:
+                for i, dag in enumerate(dags[structure]):
+                    args.graph_structure = structure + "-dag-" + str(i)  # for logging
+                    args.heuristic = heuristic # for logging 
                     main(args, dag)
   
     

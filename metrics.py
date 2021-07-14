@@ -48,6 +48,8 @@ class Logger(object):
         else:
             self.stop_count = 0
             
+        print('\nSHD : ', self.shd, '\nSTOP COUNT : ', self.stop_count)
+            
         if self.stop_count == 3 or epoch == self.max_epochs:
             self.writer.add_scalar('Intervention loops needed', epoch+1-self.stop_count)
             return 1

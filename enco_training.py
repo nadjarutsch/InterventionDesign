@@ -193,7 +193,7 @@ def graph_fitting(args: argparse.Namespace,
         gamma_optimizer.zero_grad()
         theta_optimizer.zero_grad()
         batch = next(iter(int_dataloader))
-        adj_matrices, logregret = score(batch, int_idx, adj_matrix, model)
+        adj_matrices, logregret = score(batch, int_idx, adj_matrix, model, K_s=args.K)
         theta_mask = update(args, int_idx, adj_matrix, adj_matrices, logregret) 
 
         gamma_optimizer.step()
@@ -206,31 +206,31 @@ def score(int_batch,
           adj_matrix,
           model, 
           mirror_graphs=False, 
-          C_s=20,
+          K_s=100,
           max_graph_stacking=1000):
 
         adj_matrices = []
         logregret = []
 
-        C_s_list = [min(max_graph_stacking, C_s-i*max_graph_stacking) for i in range(math.ceil(C_s * 1.0 / max_graph_stacking))]
-        C_s_list = [(C_s_list[i],sum(C_s_list[:i])) for i in range(len(C_s_list))]
+        K_s_list = [min(max_graph_stacking, K_s-i*max_graph_stacking) for i in range(math.ceil(K_s * 1.0 / max_graph_stacking))]
+        K_s_list = [(K_s_list[i],sum(K_s_list[:i])) for i in range(len(K_s_list))]
 
         edge_prob = adj_matrix.edge_probs().detach()
-        edge_prob_batch = edge_prob[None].expand(C_s,-1,-1)
+        edge_prob_batch = edge_prob[None].expand(K_s,-1,-1)
         sample_matrix = torch.bernoulli(edge_prob_batch)
         sample_matrix = sample_matrix * (1 - torch.eye(sample_matrix.shape[-1], device=sample_matrix.device)[None])
  
         adj_matrices.append(sample_matrix)
 
-        for c_idx, (C, start_idx) in enumerate(C_s_list):
-            adj_matrix_expanded = sample_matrix[start_idx:start_idx+C,None].expand(-1,int_batch.shape[0],-1,-1).flatten(0,1)
-            batch_exp = int_batch[None,:].expand(C,-1,-1).flatten(0,1)
+        for k_idx, (K, start_idx) in enumerate(K_s_list):
+            adj_matrix_expanded = sample_matrix[start_idx:start_idx+K,None].expand(-1,int_batch.shape[0],-1,-1).flatten(0,1)
+            batch_exp = int_batch[None,:].expand(K,-1,-1).flatten(0,1)
             nll = evaluate_likelihoods(batch_exp, adj_matrix_expanded, int_idx, model)
-            nll = nll.reshape(C, int_batch.shape[0], -1)
+            nll = nll.reshape(K, int_batch.shape[0], -1)
         
                 
             try:
-                logregret[c_idx] += nll.mean(dim=1)
+                logregret[k_idx] += nll.mean(dim=1)
             except:
                 logregret.append(nll.mean(dim=1))
 

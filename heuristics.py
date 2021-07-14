@@ -54,8 +54,8 @@ def uncertain_out(args: argparse.Namespace,
     
     uncertainty = adj_matrix.uncertainty(temperature=args.temperature).cpu()
     
-    # don't sample variables based on self-cycle edges
-    uncertainty.fill_diagonal_(0)
+    # don't sample variables based on self-cycle edges (deprecated)
+  #  uncertainty.fill_diagonal_(0) 
     
     int_idx = torch.multinomial(uncertainty.flatten(), num_samples=1)
     
@@ -78,7 +78,7 @@ def uncertain_children(args: argparse.Namespace,
     uncertainty = adj_matrix.uncertainty(temperature=args.temperature)
     
     # don't sample variables based on self-cycle edges
-    uncertainty.fill_diagonal_(0)
+  #  uncertainty.fill_diagonal_(0)
     
     int_idx = torch.multinomial(torch.sum(uncertainty, 1), num_samples=1)
     
@@ -93,7 +93,7 @@ def uncertain_neighbours(args: argparse.Namespace,
     uncertainty = adj_matrix.uncertainty(temperature=args.temperature)
     
     # don't sample variables based on self-cycle edges
-    uncertainty.fill_diagonal_(0)
+  #  uncertainty.fill_diagonal_(0)
     
     incoming = torch.sum(uncertainty,0)
     outgoing = torch.sum(uncertainty,1)
