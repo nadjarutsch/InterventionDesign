@@ -18,9 +18,7 @@ class Logger(object):
     
     def before_training(self, adjmatrix_pred, dag):
         metrics = get_metrics(adjmatrix_pred, torch.from_numpy(dag.adj_matrix))
-        
-        with open('%s/dag.pkl' % self.writer.log_dir, 'wb') as output:
-            pickle.dump(dag, output, pickle.HIGHEST_PROTOCOL)
+        dag.save_to_file('%s/dag.pt' % self.writer.log_dir)
 
         self.writer.add_scalar('SHD', metrics['SHD'], global_step=0)
         self.writer.add_scalar('Precision', metrics['precision'], global_step=0)
@@ -48,7 +46,7 @@ class Logger(object):
         else:
             self.stop_count = 0
             
-        print('\nSHD : ', self.shd, '\nSTOP COUNT : ', self.stop_count)
+        print('\nSHD: ', self.shd)
             
         if self.stop_count == 3 or epoch == self.max_epochs:
             self.writer.add_scalar('Intervention loops needed', epoch+1-self.stop_count)
@@ -58,6 +56,7 @@ class Logger(object):
 
 
 def get_metrics(pred_adjmatrix, true_adjmatrix):
+    true_adjmatrix = true_adjmatrix.to(dtype=torch.bool)
     binary_gamma = pred_adjmatrix.binary
     false_positives = torch.logical_and(binary_gamma, ~true_adjmatrix)
     false_negatives = torch.logical_and(~binary_gamma, true_adjmatrix)
@@ -69,16 +68,6 @@ def get_metrics(pred_adjmatrix, true_adjmatrix):
 
     recall = TP / max(TP + FN, 1e-5)
     precision = TP / max(TP + FP, 1e-5)
-
-    # Get details on False Positives
- #   FP_elems = torch.where(torch.logical_and(binary_gamma, ~true_adjmatrix))
-  #  FP_relations = self.true_node_relations[FP_elems]
-   # FP_dict = {
-    #    "ancestors": (FP_relations == -1).sum().item(), # i->j => j is a child of i
-     #   "descendants": (FP_relations == 1).sum().item(),
-      #  "confounders": (FP_relations == 2).sum().item(),
-       # "independents": (FP_relations == 0).sum().item() 
-  #  }
 
     rev = torch.logical_and(binary_gamma, true_adjmatrix.T)
     num_revs = rev.float().sum().item()
@@ -92,8 +81,7 @@ def get_metrics(pred_adjmatrix, true_adjmatrix):
         "SHD": int(SHD),
         "reverse": int(num_revs),
         "recall": recall,
-        "precision": precision,
-#        "FP_details": FP_dict
+        "precision": precision
     }
     return metrics
 

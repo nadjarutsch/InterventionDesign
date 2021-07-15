@@ -134,7 +134,7 @@ if __name__ == '__main__':
     # Settings
     parser.add_argument('--data_parallel', default=True, type=bool, help='Use parallelization for efficiency')
     parser.add_argument('--num_variables', default=25, type=int, help='Number of causal variables')
-    parser.add_argument('--min_categories', default=2, type=int, help='Minimum number of categories of a causal variable')
+    parser.add_argument('--min_categories', default=10, type=int, help='Minimum number of categories of a causal variable')
     parser.add_argument('--max_categories', default=10, type=int, help='Maximum number of categories of a causal variable')
     parser.add_argument('--n_obs_samples', default=10000, type=int, help='Number of observational samples from the joint distribution of a synthetic graph')
     parser.add_argument('--epochs', default=100, type=int, help='Maximum number of interventions')
@@ -150,7 +150,7 @@ if __name__ == '__main__':
     parser.add_argument('--hidden_dims', default=[64], type=list, nargs='+', help='Number of hidden units in each layer of the Multivariable MLP')
     
     # Optimizers
-    parser.add_argument('--lr_model', default=2e-2, type=float, help='Learning rate for fitting the model to observational data')
+    parser.add_argument('--lr_model', default=5e-3, type=float, help='Learning rate for fitting the model to observational data')
     parser.add_argument('--betas_model', default=(0.9,0.999), type=tuple, help='Betas used for Adam optimizer (model fitting)')
     parser.add_argument('--lr_gamma', default=2e-2, type=float, help='Learning rate for updating gamma parameters')
     parser.add_argument('--betas_gamma', default=(0.9,0.9), type=tuple, help='Betas used for Adam optimizer OR momentum used for SGD (gamma update)')
@@ -160,7 +160,7 @@ if __name__ == '__main__':
     # Graph fitting (interventional data)
     parser.add_argument('--int_batch_size', default=128, type=int, help='Number of samples per intervention')
     parser.add_argument('--int_epochs', default=100, type=int, help='Number of epochs for updating the graph gamma and theta parameters of the graph')
-    parser.add_argument('--lambda_sparse', default=0.004, type=float, help='Threshold for interpreting an edge as beneficial')
+    parser.add_argument('--lambda_sparse', default=0.001, type=float, help='Threshold for interpreting an edge as beneficial')
     parser.add_argument('--K', default=100, help='Number of graph samples for gradient estimation')
 
     args: argparse.Namespace = parser.parse_args()
@@ -171,7 +171,7 @@ if __name__ == '__main__':
         argparse_dict = vars(args)
         with open(datetime.today().strftime('tb_logs/%Y-%m-%d-%H-%M-hparams.json'), 'w') as fp:
             json.dump(argparse_dict, fp)
-        for structure in ['jungle', 'chain', 'bidiag', 'collider', 'full', 'regular']:
+        for structure in ['jungle', 'chain', 'bidiag', 'collider', 'full', 'regular', 'random']:
             for i in range(5):
                 dags[structure].append(generate_categorical_graph(num_vars=args.num_variables,
                                                                   min_categs=args.min_categories,
