@@ -11,7 +11,7 @@ class Logger(object):
         """Inits an instance of Logger."""       
         super().__init__()
         date = datetime.today().strftime('%Y-%m-%d')
-        suffix = args.log_graph_structure + "-heuristic-" + args.log_heuristic + "-int_dist-" + args.log_int_dist + "-int_temp-" + args.log_temp_int + datetime.today().strftime('-%H-%M')
+        suffix = args.log_graph_structure + "-heuristic-" + args.log_heuristic + "-int_dist-" + args.log_int_dist + "-int_temp-" + str(args.log_temp_int) + datetime.today().strftime('-%H-%M')
         self.writer = SummaryWriter("tb_logs/%s/%s" % (date, suffix))
         self.stop_count = 0
         self.max_epochs = args.epochs
