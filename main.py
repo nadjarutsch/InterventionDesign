@@ -36,7 +36,7 @@ def main(args: argparse.Namespace, dag: CausalDAG=None):
     
     # initialize optimizers
     model_optimizer = torch.optim.Adam(model.parameters(), lr=args.lr_model, betas=args.betas_model)   
-    gamma_optimizer = torch.optim.Adam([adj_matrix.gamma], lr=args.lr_gamma, betas=args.betas_gamma)    
+    gamma_optimizer = AdamGamma(adj_matrix.gamma, lr=args.lr_gamma, beta1=args.betas_gamma[0], beta2=args.betas_gamma[1])    
     theta_optimizer = AdamTheta(adj_matrix.theta, lr=args.lr_theta, beta1=args.betas_theta[0], beta2=args.betas_theta[1])
     
     # initialize the environment: create a graph and generate observational 
@@ -119,7 +119,6 @@ def init_model(args: argparse.Namespace) -> Tuple[MultivarMLP, AdjacencyMatrix]:
         device = torch.device("cpu")
     
     adj_matrix = AdjacencyMatrix(args.num_variables, device)
-    
     return model, adj_matrix
 
 
@@ -139,11 +138,12 @@ if __name__ == '__main__':
     parser.add_argument('--max_categories', default=10, type=int, help='Maximum number of categories of a causal variable')
     parser.add_argument('--n_obs_samples', default=100000, type=int, help='Number of observational samples from the joint distribution of a synthetic graph')
     parser.add_argument('--epochs', default=30, type=int, help='Maximum number of interventions')
-    parser.add_argument('--graph_structure', choices=['random', 'jungle', 'chain', 'bidiag', 'collider', 'full', 'regular'], default='jungle', help='Structure of the true causal graph')
-    parser.add_argument('--heuristic', choices=['uniform', 'uncertain-outgoing', 'sequence', 'uncertain-children', 'uncertain-neighbours', 'true-distance'], default='uniform', help='Heuristic used for choosing intervention nodes')
+    parser.add_argument('--graph_structure', type=str, nargs='+', default=['jungle'], help='Structure of the true causal graph')
+    parser.add_argument('--heuristic', type=str, nargs='+', default=['uniform'], help='Heuristic used for choosing intervention nodes')
     parser.add_argument('--temperature', default=10.0, type=float, help='Temperature used for sampling the intervention variable')
     parser.add_argument('--full_test', default=True, type=bool, help='Full test run for comparison of all heuristics (fixed graphs)')
-    parser.add_argument('--edge_prob', default=0.4, help='Edge likelihood for generating a graph') # currently not used (overwritten by structure)
+    parser.add_argument('--edge_prob', default=0.4, help='Edge likelihood for generating a graph') # only used for "random" graph structure
+    parser.add_argument('--num_graphs', default=1, type=int, help='Number of graphs per structure')
 
     # Distribution fitting (observational data)
     parser.add_argument('--obs_batch_size', default=128, type=int, help='Batch size used for fitting the graph to observational data')
@@ -161,9 +161,10 @@ if __name__ == '__main__':
     # Graph fitting (interventional data)
     parser.add_argument('--int_batch_size', default=128, type=int, help='Number of samples per intervention')
     parser.add_argument('--int_epochs', default=100, type=int, help='Number of epochs for updating the graph gamma and theta parameters of the graph')
-    parser.add_argument('--int_dist', choices=['uniform', 'inverse-softmax'], default='inverse-softmax', help='Categorical distribution used for sampling intervention values')
+    parser.add_argument('--int_dist', type=str, nargs='+', default=['inverse-softmax'], help='Categorical distribution used for sampling intervention values')
     parser.add_argument('--lambda_sparse', default=0.004, type=float, help='Threshold for interpreting an edge as beneficial')
     parser.add_argument('--K', default=100, help='Number of graph samples for gradient estimation')
+    parser.add_argument('--temp_int', default=[1], type=float, nargs='+', help='Temperature used for distribution of intervention values')
 
     args: argparse.Namespace = parser.parse_args()
 
@@ -173,8 +174,8 @@ if __name__ == '__main__':
         argparse_dict = vars(args)
         with open(datetime.today().strftime('tb_logs/%Y-%m-%d-%H-%M-hparams.json'), 'w') as fp:
             json.dump(argparse_dict, fp)
-        for structure in ['collider', 'full']:
-            for i in range(5):
+        for structure in args.graph_structure:
+            for i in range(args.num_graphs):
                 dags[structure].append(generate_categorical_graph(num_vars=args.num_variables,
                                                                   min_categs=args.min_categories,
                                                                   max_categs=args.max_categories,
@@ -183,18 +184,22 @@ if __name__ == '__main__':
                                                                   edge_prob=args.edge_prob,
                                                                   use_nn=True))
             
-         #   for temperature in [0.5, 1, 5, 10, 100]:
-          #  for heuristic in ['uniform', 'uncertain-outgoing', 'sequence', 'uncertain-children', 'uncertain-neighbours', 'true-distance']:
-            for int_dist in ['inverse', 'uniform']:
-                for i, dag in enumerate(dags[structure]):
-                    args.graph_structure = structure + "-dag-" + str(i)  # for logging
-                #    args.heuristic = heuristic # for logging 
-                #    args.temperature = temperature
-                    args.int_dist = int_dist
-                    main(args, dag)
+            for heuristic in args.heuristic:
+                for int_dist in args.int_dist:
+                    if int_dist == 'uniform':
+                        temp_int = [1]
+                    else:
+                        temp_int = args.temp_int
+                    for temperature in temp_int:                           
+                        for i, dag in enumerate(dags[structure]):
+                            args.log_graph_structure = structure + "-dag-" + str(i)  # for logging
+                            args.log_heuristic = heuristic # for logging 
+                            args.log_temp_int = temperature
+                            args.log_int_dist = int_dist
+                            main(args, dag)
   
     
   
     # single run 
-    else:
-        main(args)
+  #  else:
+   #     main(args)

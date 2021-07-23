@@ -11,7 +11,6 @@ class GraphData(torch.utils.data.Dataset):
             num_categs = [v.prob_dist.num_categs for v in self.graph.variables]
         self.data =  data
         self.num_categs = num_categs
-        
     
     def __len__(self):
         return self.data.shape[0]
