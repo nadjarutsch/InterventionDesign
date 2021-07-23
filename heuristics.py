@@ -27,23 +27,29 @@ def choose_intervention(args: argparse.Namespace,
     Returns:
         Index of the node to be intervened on.
     """    
-    if args.heuristic == 'uniform':
+    if args.log_heuristic == 'uniform':
         return uniform(adj_matrix.num_variables)
     
-    elif args.heuristic == 'uncertain-outgoing':
+    elif args.log_heuristic == 'uncertain-outgoing':
         return uncertain_out(args, adj_matrix) 
     
-    elif args.heuristic == 'sequence':
+    elif args.log_heuristic == 'sequence':
         return sequence(epoch, adj_matrix.num_variables) 
     
-    elif args.heuristic == 'uncertain-children':
+    elif args.log_heuristic == 'uncertain-children':
         return uncertain_children(args, adj_matrix) 
     
-    elif args.heuristic == 'uncertain-neighbours':
+    elif args.log_heuristic == 'uncertain-neighbours':
         return uncertain_neighbours(args, adj_matrix) 
     
-    elif args.heuristic == 'true-distance':
-        return true_distance(true_adj, adj_matrix)
+    elif args.log_heuristic == 'true-distance':
+        return true_distance(args.temperature, true_adj, adj_matrix)
+    
+    elif args.log_heuristic == 'varying-uncertain':
+        return vary_uncertain(args, adj_matrix, epoch)
+    
+    elif args.log_heuristic == 'num-children':
+        return num_children(args, adj_matrix)
 
 @torch.no_grad()
 def uniform(num_variables: int) -> int:
@@ -56,11 +62,7 @@ def uncertain_out(args: argparse.Namespace,
                   adj_matrix: AdjacencyMatrix) -> int:
     """More likely to intervene on nodes with highly uncertain outgoing edge."""
     
-    uncertainty = adj_matrix.uncertainty(temperature=args.temperature).cpu()
-    
-    # don't sample variables based on self-cycle edges (deprecated)
-  #  uncertainty.fill_diagonal_(0) 
-    
+    uncertainty = adj_matrix.uncertainty(temperature=args.temperature).cpu() 
     int_idx = torch.multinomial(uncertainty.flatten(), num_samples=1)
     
     # outgoing edge
@@ -79,12 +81,17 @@ def uncertain_children(args: argparse.Namespace,
     """More likely to intervene on nodes where the sum of the uncertainty of 
     outgoing edges is high."""
     
-    uncertainty = adj_matrix.uncertainty(temperature=args.temperature)
-    
-    # don't sample variables based on self-cycle edges
-  #  uncertainty.fill_diagonal_(0)
-    
+    uncertainty = adj_matrix.uncertainty(temperature=args.temperature)    
     int_idx = torch.multinomial(torch.sum(uncertainty, 1), num_samples=1)
+    
+    return int_idx.item()
+
+@torch.no_grad()
+def num_children(args: argparse.Namespace,
+                       adj_matrix: AdjacencyMatrix) -> int:
+    
+    num_children = torch.sum(adj_matrix.binary, 1)  
+    int_idx = torch.multinomial(num_children, num_samples=1)
     
     return int_idx.item()
     
@@ -96,8 +103,21 @@ def uncertain_neighbours(args: argparse.Namespace,
     
     uncertainty = adj_matrix.uncertainty(temperature=args.temperature)
     
-    # don't sample variables based on self-cycle edges
-  #  uncertainty.fill_diagonal_(0)
+    incoming = torch.sum(uncertainty,0)
+    outgoing = torch.sum(uncertainty,1)
+
+    int_idx = torch.multinomial(incoming + outgoing, num_samples=1)
+    
+    return int_idx.item()
+
+
+@torch.no_grad()
+def vary_uncertain(args: argparse.Namespace,
+                   adj_matrix: AdjacencyMatrix,
+                   epoch: int) -> int:
+    
+    temperature = 2 * epoch / args.int_epochs - 1
+    uncertainty = adj_matrix.uncertainty(temperature=temperature)
     
     incoming = torch.sum(uncertainty,0)
     outgoing = torch.sum(uncertainty,1)
@@ -107,35 +127,37 @@ def uncertain_neighbours(args: argparse.Namespace,
     return int_idx.item()
 
 @torch.no_grad()
-def true_distance(true_adj: torch.Tensor, 
+def true_distance(temperature: int,
+                  true_adj: torch.Tensor, 
                   adj_matrix: AdjacencyMatrix) -> int:
     """Intervene on parent node of the edge with the highest distance to the
     ground truth (possible optimal intervention strategy)."""
     
-    dist = (true_adj - adj_matrix.edge_probs()).abs()
-    int_idx = torch.argmax(dist.max(dim=1).values, dim=0).item()
+    dist = F.softmax(temperature * (true_adj - adj_matrix.edge_probs()).abs())
+    int_idx = torch.multinomial(dist.max(dim=1).values, num_samples=1)
     
-    return int_idx
+    return int_idx.item()
 
 
 def choose_distribution(args: argparse.Namespace,
                         obs_data: GraphData) -> np.array:
     
-    if args.int_dist == 'uniform':
+    if args.log_int_dist == 'uniform':
         return unif_dist(obs_data)
     
-    elif args.int_dist == 'inverse-softmax':
-        return inverse_softmax(obs_data)
+    elif args.log_int_dist == 'inverse-softmax':
+        return inverse_softmax(args.log_temp_int, obs_data)
     
 
-def unif_dist(obs_data: GraphData):
+def unif_dist(obs_data: GraphData) -> list:
     int_dists = [_random_categ(size=n, scale=0.0, axis=-1) for n in obs_data.num_categs]
     return int_dists
 
-def inverse_softmax(obs_data):
-    value_dist = defaultdict(list)
+def inverse_softmax(temperature: int, 
+                    obs_data: GraphData) -> defaultdict:
+    int_dists = defaultdict(list)
     for i, num_categs in enumerate(obs_data.num_categs):
         for n in range(num_categs):
-            value_dist[i].append(1 / ((obs_data.data[:,i] == n).sum(dim=0).item() + 1)) # smoothing
-        value_dist[i] = F.softmax(torch.Tensor(value_dist[i]))
-    return value_dist
+            int_dists[i].append(1 / ((obs_data.data[:,i] == n).sum(dim=0).item() + 1)) # smoothing
+        int_dists[i] = F.softmax(temperature * torch.Tensor(int_dists[i]))
+    return int_dists
