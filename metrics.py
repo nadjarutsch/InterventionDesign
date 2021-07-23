@@ -11,11 +11,12 @@ class Logger(object):
         """Inits an instance of Logger."""       
         super().__init__()
         date = datetime.today().strftime('%Y-%m-%d')
-        suffix = args.graph_structure + "-" + args.heuristic + datetime.today().strftime('-%H-%M')
+        suffix = args.graph_structure + "-" + args.heuristic + "-int_dist-" + args.int_dist + datetime.today().strftime('-%H-%M')
         self.writer = SummaryWriter("tb_logs/%s/%s" % (date, suffix))
         self.stop_count = 0
         self.max_epochs = args.epochs
     
+    @torch.no_grad()
     def before_training(self, adjmatrix_pred, dag):
         metrics = get_metrics(adjmatrix_pred, torch.from_numpy(dag.adj_matrix))
         dag.save_to_file('%s/dag.pt' % self.writer.log_dir)
@@ -28,6 +29,7 @@ class Logger(object):
         
         self.shd = metrics['SHD'] # needed as stop criterion
     
+    @torch.no_grad()
     def on_epoch_end(self, adjmatrix_pred, adjmatrix_target, epoch):
         metrics = get_metrics(adjmatrix_pred, adjmatrix_target)
         chi = chi_square(self.stats, adjmatrix_pred.num_variables)
@@ -55,6 +57,7 @@ class Logger(object):
         return 0
 
 
+@torch.no_grad()
 def get_metrics(pred_adjmatrix, true_adjmatrix):
     true_adjmatrix = true_adjmatrix.to(dtype=torch.bool)
     binary_gamma = pred_adjmatrix.binary
@@ -72,7 +75,7 @@ def get_metrics(pred_adjmatrix, true_adjmatrix):
     rev = torch.logical_and(binary_gamma, true_adjmatrix.T)
     num_revs = rev.float().sum().item()
     SHD = (false_positives + false_negatives + rev + rev.T).float().sum().item() - num_revs
-
+    
     metrics = {
         "TP": int(TP),
         "TN": int(TN),
@@ -89,7 +92,7 @@ def get_metrics(pred_adjmatrix, true_adjmatrix):
 
 
 
-
+@torch.no_grad()
 def chi_square(int_stats, num_variables):
     """Chi-squared test value of distribution over intervention variables compared 
     to uniform distribution"""

@@ -108,15 +108,15 @@ def distribution_fitting(args: argparse.Namespace,
         distributionFitting: Fitting module with updated MLP.
         avg_loss: Average loss in one fitting epoch.
     """
-    sample_matrix = torch.sigmoid(adj_matrix.gamma.detach())
+    sample_matrix = torch.sigmoid(adj_matrix.gamma.detach()) * torch.sigmoid(adj_matrix.theta.detach())
     sfunc = lambda batch_size: sample_func(sample_matrix=sample_matrix, 
-                                           theta=adj_matrix.theta,
                                            batch_size=args.obs_batch_size) 
         
     avg_loss = 0.0
     t = track(range(args.obs_epochs), leave=False, desc="Model update loop")
+    data_iter = iter(dataloader)
     for _ in t:
-        batch = next(iter(dataloader))
+        batch, data_iter = get_next_batch(dataloader, data_iter)
         adj_matrices = sfunc(batch_size=batch.shape[0])
 
         model.train()
@@ -140,20 +140,32 @@ def distribution_fitting(args: argparse.Namespace,
     return avg_loss
 
 
-def sample_func(sample_matrix, theta, batch_size):
-    
-    A = sample_matrix[None].expand(batch_size, -1, -1)
-    A = torch.bernoulli(A)
-    order_p = torch.sigmoid(theta) * (1 - torch.eye(theta.shape[0], device=theta.device))
-    order_p = order_p[None].expand(batch_size, -1, -1)
-    order_mask = torch.bernoulli(order_p)
 
-    A = A * order_mask
+def get_next_batch(data_loader, data_iter):
+    """
+    Helper function for sampling batches one by one from the data loader.
+    """
+    try:
+        batch = next(data_iter)
+    except StopIteration:
+        data_iter = iter(data_loader)
+        batch = next(data_iter)
+    return batch, data_iter
 
-    return A 
+@torch.no_grad()
+def sample_func(sample_matrix, batch_size):
+    """
+    Samples a batch of adjacency matrices that are used for masking the inputs.
+    """
+    sample_matrix = sample_matrix[None].expand(batch_size, -1, -1)
+    adj_matrices = torch.bernoulli(sample_matrix)
+    # Mask diagonals
+    adj_matrices[:, torch.arange(adj_matrices.shape[1]), torch.arange(adj_matrices.shape[2])] = 0
+    return adj_matrices
 
 
 
+@torch.no_grad()
 def graph_fitting(args: argparse.Namespace,
                   adj_matrix: AdjacencyMatrix,
                   gamma_optimizer: torch.optim.Adam or torch.optim.SGD,
@@ -161,7 +173,8 @@ def graph_fitting(args: argparse.Namespace,
                   model: MultivarMLP,
                   env: CausalEnv,
                   epoch: int,
-                  logger: Logger):
+                  logger: Logger,
+                  int_dists: defaultdict):
     """Fit the adjacency matrix to interventional data, given the learned 
     multivariable MLP.
     
@@ -177,7 +190,7 @@ def graph_fitting(args: argparse.Namespace,
     Returns:
         updateModule: Graph fitting module with updated adjacency matrix.
     """
-    logger.stats = defaultdict(int) 
+    logger.stats = defaultdict(int)    
     
     for i in track(range(args.int_epochs), leave=False, desc="Gamma and theta update loop"):
         # perform intervention and update parameters based on interventional data
@@ -187,20 +200,20 @@ def graph_fitting(args: argparse.Namespace,
             true_adj_matrix = torch.from_numpy(env.dag.adj_matrix).float().to(adj_matrix.gamma.device)
             int_idx = choose_intervention(args, i, adj_matrix=adj_matrix, true_adj=true_adj_matrix)
         logger.stats[int_idx] += 1 
-        int_data, reward, info = env.step(int_idx, args.int_batch_size) 
+        int_data, reward, info = env.step(int_idx, args.int_batch_size, int_dists[int_idx]) 
         int_dataloader = DataLoader(int_data, batch_size=args.int_batch_size, shuffle=True, drop_last=True)
+        batch = next(iter(int_dataloader))
         
         gamma_optimizer.zero_grad()
         theta_optimizer.zero_grad()
-        batch = next(iter(int_dataloader))
         adj_matrices, logregret = score(batch, int_idx, adj_matrix, model, K_s=args.K)
         theta_mask = update(args, int_idx, adj_matrix, adj_matrices, logregret) 
-
         gamma_optimizer.step()
         theta_optimizer.step(theta_mask)
 
  
- 
+
+@torch.no_grad()
 def score(int_batch, 
           int_idx,
           adj_matrix,
@@ -239,13 +252,14 @@ def score(int_batch,
 
         return adj_matrices, logregret
   
-    
+
+@torch.no_grad()   
 def update(args, int_idx, adj_matrix, adj_matrices, logregret):
         if adj_matrix.gamma.grad is not None:
             adj_matrix.gamma.grad.fill_(0)
         gamma_grads, theta_grads, debug = gradient_estimator(args, adj_matrix, adj_matrices, logregret, int_idx)
         adj_matrix.gamma.grad = gamma_grads
-        adj_matrix.theta.grad = theta_grads
+        adj_matrix.theta.grad = theta_grads        
             
         return debug["theta_mask"]
         
@@ -270,6 +284,10 @@ def gradient_estimator(args, adj_matrix, adj_matrices, logregret, int_idx):
     theta_grads[:int_idx] = 0
     theta_grads[int_idx+1:] = 0
     theta_grads -= theta_grads.transpose(0, 1)
+    
+    # Masking gamma for incoming edges to intervened variable
+    gamma_grads[:, int_idx] = 0.
+    gamma_grads[torch.arange(gamma_grads.shape[0]), torch.arange(gamma_grads.shape[1])] = 0.
 
     # Creating a mask which theta's are actually updated
     theta_mask = torch.zeros_like(theta_grads)

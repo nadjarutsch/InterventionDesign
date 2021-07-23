@@ -60,15 +60,14 @@ class CausalEnv(gym.Env):
         
     def step(self, 
              action_idx: int, 
-             num_samples: int) -> Tuple[GraphData, int, dict]:
+             num_samples: int,
+             int_dist: list) -> Tuple[GraphData, int, dict]:
         
         # Perform intervention, sample from interventional SCM     
         var = self.dag.variables[action_idx]
         
         # Hard intervention => replace p(X_n) by uniform categorical
-        int_dist = _random_categ(size=(var.prob_dist.num_categs,), scale=0.0, axis=-1)
-        value = np.random.multinomial(n=1, pvals=int_dist, size=(num_samples,))
-        value = np.argmax(value, axis=-1) # One-hot to index
+        value = torch.multinomial(torch.Tensor(int_dist), num_samples=num_samples, replacement=True).cpu().detach().numpy()
         intervention_dict = {var.name: value}
         
         int_data = self.dag.sample(interventions=intervention_dict, 

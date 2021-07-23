@@ -2,6 +2,7 @@ from env import CausalEnv
 from metrics import *
 from enco_model import *
 from enco_training import *
+from heuristics import *
 
 import argparse
 import torch
@@ -48,6 +49,7 @@ def main(args: argparse.Namespace, dag: CausalDAG=None):
                     dag=dag)
     obs_data = env.reset(n_samples=args.n_obs_samples)
     obs_dataloader = DataLoader(obs_data, batch_size=args.obs_batch_size, shuffle=True, drop_last=True)
+    int_dists = choose_distribution(args, obs_data)
     
     # initialize CE loss module 
     loss_module = nn.CrossEntropyLoss()
@@ -76,7 +78,8 @@ def main(args: argparse.Namespace, dag: CausalDAG=None):
                       model, 
                       env,
                       epoch,
-                      logger)
+                      logger,
+                      int_dists)
         
         # logging
         stop = logger.on_epoch_end(adj_matrix, torch.from_numpy(env.dag.adj_matrix), epoch)
@@ -105,9 +108,7 @@ def init_model(args: argparse.Namespace) -> Tuple[MultivarMLP, AdjacencyMatrix]:
     model = create_model(num_vars=args.num_variables, 
                          num_categs=args.max_categories, 
                          hidden_dims=args.hidden_dims, 
-                         share_embeds=False,
-                         actfn='leakyrelu',
-                         sparse_embeds=False)
+                         actfn='leakyrelu')
     
     
     if args.data_parallel:
@@ -136,10 +137,10 @@ if __name__ == '__main__':
     parser.add_argument('--num_variables', default=25, type=int, help='Number of causal variables')
     parser.add_argument('--min_categories', default=10, type=int, help='Minimum number of categories of a causal variable')
     parser.add_argument('--max_categories', default=10, type=int, help='Maximum number of categories of a causal variable')
-    parser.add_argument('--n_obs_samples', default=10000, type=int, help='Number of observational samples from the joint distribution of a synthetic graph')
-    parser.add_argument('--epochs', default=100, type=int, help='Maximum number of interventions')
+    parser.add_argument('--n_obs_samples', default=100000, type=int, help='Number of observational samples from the joint distribution of a synthetic graph')
+    parser.add_argument('--epochs', default=30, type=int, help='Maximum number of interventions')
     parser.add_argument('--graph_structure', choices=['random', 'jungle', 'chain', 'bidiag', 'collider', 'full', 'regular'], default='jungle', help='Structure of the true causal graph')
-    parser.add_argument('--heuristic', choices=['uniform', 'uncertain-outgoing', 'sequence', 'uncertain-children', 'uncertain-neighbours', 'true-distance'], default='true-distance', help='Heuristic used for choosing intervention nodes')
+    parser.add_argument('--heuristic', choices=['uniform', 'uncertain-outgoing', 'sequence', 'uncertain-children', 'uncertain-neighbours', 'true-distance'], default='uniform', help='Heuristic used for choosing intervention nodes')
     parser.add_argument('--temperature', default=10.0, type=float, help='Temperature used for sampling the intervention variable')
     parser.add_argument('--full_test', default=True, type=bool, help='Full test run for comparison of all heuristics (fixed graphs)')
     parser.add_argument('--edge_prob', default=0.4, help='Edge likelihood for generating a graph') # currently not used (overwritten by structure)
@@ -160,7 +161,8 @@ if __name__ == '__main__':
     # Graph fitting (interventional data)
     parser.add_argument('--int_batch_size', default=128, type=int, help='Number of samples per intervention')
     parser.add_argument('--int_epochs', default=100, type=int, help='Number of epochs for updating the graph gamma and theta parameters of the graph')
-    parser.add_argument('--lambda_sparse', default=0.001, type=float, help='Threshold for interpreting an edge as beneficial')
+    parser.add_argument('--int_dist', choices=['uniform', 'inverse-softmax'], default='inverse-softmax', help='Categorical distribution used for sampling intervention values')
+    parser.add_argument('--lambda_sparse', default=0.004, type=float, help='Threshold for interpreting an edge as beneficial')
     parser.add_argument('--K', default=100, help='Number of graph samples for gradient estimation')
 
     args: argparse.Namespace = parser.parse_args()
@@ -171,7 +173,7 @@ if __name__ == '__main__':
         argparse_dict = vars(args)
         with open(datetime.today().strftime('tb_logs/%Y-%m-%d-%H-%M-hparams.json'), 'w') as fp:
             json.dump(argparse_dict, fp)
-        for structure in ['jungle', 'chain', 'bidiag', 'collider', 'full', 'regular', 'random']:
+        for structure in ['collider', 'full']:
             for i in range(5):
                 dags[structure].append(generate_categorical_graph(num_vars=args.num_variables,
                                                                   min_categs=args.min_categories,
@@ -181,10 +183,14 @@ if __name__ == '__main__':
                                                                   edge_prob=args.edge_prob,
                                                                   use_nn=True))
             
-            for heuristic in ['uniform', 'uncertain-outgoing', 'sequence', 'uncertain-children', 'uncertain-neighbours', 'true-distance']:
+         #   for temperature in [0.5, 1, 5, 10, 100]:
+          #  for heuristic in ['uniform', 'uncertain-outgoing', 'sequence', 'uncertain-children', 'uncertain-neighbours', 'true-distance']:
+            for int_dist in ['inverse', 'uniform']:
                 for i, dag in enumerate(dags[structure]):
                     args.graph_structure = structure + "-dag-" + str(i)  # for logging
-                    args.heuristic = heuristic # for logging 
+                #    args.heuristic = heuristic # for logging 
+                #    args.temperature = temperature
+                    args.int_dist = int_dist
                     main(args, dag)
   
     
