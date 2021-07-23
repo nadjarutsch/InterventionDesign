@@ -1,10 +1,14 @@
 import torch
 import numpy as np
 import argparse
+from collections import defaultdict
+import torch.nn.functional as F
 
 from enco_model import AdjacencyMatrix
+from datasets import GraphData
+from causal_graphs.variable_distributions import _random_categ
 
-
+@torch.no_grad()
 def choose_intervention(args: argparse.Namespace, 
                         epoch: int, 
                         adj_matrix: AdjacencyMatrix,
@@ -41,13 +45,13 @@ def choose_intervention(args: argparse.Namespace,
     elif args.heuristic == 'true-distance':
         return true_distance(true_adj, adj_matrix)
 
-
+@torch.no_grad()
 def uniform(num_variables: int) -> int:
     """Samples an intervention node uniformly from all nodes (baseline)."""
     
     return np.random.randint(num_variables)
 
-
+@torch.no_grad()
 def uncertain_out(args: argparse.Namespace,
                   adj_matrix: AdjacencyMatrix) -> int:
     """More likely to intervene on nodes with highly uncertain outgoing edge."""
@@ -69,7 +73,7 @@ def sequence(epoch: int,
     
     return epoch % num_variables
 
-
+@torch.no_grad()
 def uncertain_children(args: argparse.Namespace,
                        adj_matrix: AdjacencyMatrix) -> int:
     """More likely to intervene on nodes where the sum of the uncertainty of 
@@ -84,7 +88,7 @@ def uncertain_children(args: argparse.Namespace,
     
     return int_idx.item()
     
-
+@torch.no_grad()
 def uncertain_neighbours(args: argparse.Namespace,
                          adj_matrix: AdjacencyMatrix) -> int:
     """More likely to intervene on nodes where the sum of the uncertainty of 
@@ -102,7 +106,7 @@ def uncertain_neighbours(args: argparse.Namespace,
     
     return int_idx.item()
 
-
+@torch.no_grad()
 def true_distance(true_adj: torch.Tensor, 
                   adj_matrix: AdjacencyMatrix) -> int:
     """Intervene on parent node of the edge with the highest distance to the
@@ -112,3 +116,26 @@ def true_distance(true_adj: torch.Tensor,
     int_idx = torch.argmax(dist.max(dim=1).values, dim=0).item()
     
     return int_idx
+
+
+def choose_distribution(args: argparse.Namespace,
+                        obs_data: GraphData) -> np.array:
+    
+    if args.int_dist == 'uniform':
+        return unif_dist(obs_data)
+    
+    elif args.int_dist == 'inverse-softmax':
+        return inverse_softmax(obs_data)
+    
+
+def unif_dist(obs_data: GraphData):
+    int_dists = [_random_categ(size=n, scale=0.0, axis=-1) for n in obs_data.num_categs]
+    return int_dists
+
+def inverse_softmax(obs_data):
+    value_dist = defaultdict(list)
+    for i, num_categs in enumerate(obs_data.num_categs):
+        for n in range(num_categs):
+            value_dist[i].append(1 / ((obs_data.data[:,i] == n).sum(dim=0).item() + 1)) # smoothing
+        value_dist[i] = F.softmax(torch.Tensor(value_dist[i]))
+    return value_dist
