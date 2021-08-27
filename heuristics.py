@@ -45,7 +45,7 @@ def choose_intervention(args: argparse.Namespace,
     elif args.log_heuristic == 'true-distance':
         return true_distance(args.temperature, true_adj, adj_matrix)
     
-    elif args.log_heuristic == 'varying-uncertain':
+    elif args.log_heuristic == 'vary-uncertain':
         return vary_uncertain(args, adj_matrix, epoch)
     
     elif args.log_heuristic == 'num-children':
@@ -90,7 +90,7 @@ def uncertain_children(args: argparse.Namespace,
 def num_children(args: argparse.Namespace,
                        adj_matrix: AdjacencyMatrix) -> int:
     
-    num_children = torch.sum(adj_matrix.binary, 1)  
+    num_children = torch.sum(adj_matrix.edge_probs(), 1).to(dtype=float)  
     int_idx = torch.multinomial(num_children, num_samples=1)
     
     return int_idx.item()
