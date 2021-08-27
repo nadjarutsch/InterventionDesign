@@ -162,5 +162,3 @@ def inverse_softmax(temperature: int,
             int_dists[i].append(1 / ((obs_data.data[:,i] == n).sum(dim=0).item() + 1)) # smoothing
         int_dists[i] = F.softmax(temperature * torch.Tensor(int_dists[i]))
     return int_dists
-
-#test
