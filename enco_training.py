@@ -3,6 +3,7 @@ from env import CausalEnv
 from heuristics import choose_intervention
 from utils import track
 from metrics import *
+from policy import MLPolicy
 
 import argparse 
 import torch
@@ -250,7 +251,7 @@ def sample_func(sample_matrix, batch_size):
 
 
 
-@torch.no_grad()
+
 def graph_fitting(args: argparse.Namespace,
                   adj_matrix: AdjacencyMatrix,
                   gamma_optimizer: torch.optim.Adam or torch.optim.SGD,
@@ -259,7 +260,8 @@ def graph_fitting(args: argparse.Namespace,
                   env: CausalEnv,
                   epoch: int,
                   logger: Logger,
-                  int_dists: defaultdict):
+                  int_dists: defaultdict,
+                  policy: MLPolicy):
     """Fit the adjacency matrix to interventional data, given the learned 
     multivariable MLP.
     
@@ -277,13 +279,21 @@ def graph_fitting(args: argparse.Namespace,
     """
     logger.stats = defaultdict(int)    
     
+    log_prob_sum = 0
+    reward_sum = 0
+    
     for i in track(range(args.int_epochs), leave=False, desc="Gamma and theta update loop"):
         # perform intervention and update parameters based on interventional data
-        if epoch == 0 and i == 0: # always start with the same variable
-            int_idx = 0
+        
+        if args.learn_policy:
+            int_idx, log_prob = policy.act(adj_matrix.uncertainty())
         else:
-            true_adj_matrix = torch.from_numpy(env.dag.adj_matrix).float().to(adj_matrix.gamma.device)
-            int_idx = choose_intervention(args, i, adj_matrix=adj_matrix, true_adj=true_adj_matrix)
+            if epoch == 0 and i == 0: # always start with the same variable
+                int_idx = 0
+            else:
+                true_adj_matrix = torch.from_numpy(env.dag.adj_matrix).float().to(adj_matrix.gamma.device)
+                int_idx = choose_intervention(args, i, adj_matrix=adj_matrix, true_adj=true_adj_matrix)
+            
         logger.stats[int_idx] += 1 
         int_data, reward, info = env.step(int_idx, args.int_batch_size, int_dists[int_idx]) 
         int_dataloader = DataLoader(int_data, batch_size=args.int_batch_size, shuffle=True, drop_last=True)
@@ -295,7 +305,11 @@ def graph_fitting(args: argparse.Namespace,
         theta_mask = update(args, int_idx, adj_matrix, adj_matrices, logregret) 
         gamma_optimizer.step(int_idx)
         theta_optimizer.step(theta_mask)
+        
+        log_prob_sum += log_prob
+        reward_sum += reward
 
+    return log_prob_sum, reward_sum
  
 
 @torch.no_grad()

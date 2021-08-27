@@ -3,6 +3,7 @@ from metrics import *
 from enco_model import *
 from enco_training import *
 from heuristics import *
+from policy import MLPolicy
 
 import argparse
 import torch
@@ -12,7 +13,7 @@ from typing import Tuple
 from collections import defaultdict
 import json
 from datetime import datetime
-import os
+from statistics import mean
 
 from utils import track
 from causal_graphs.graph_generation import generate_categorical_graph, get_graph_func
@@ -32,13 +33,6 @@ def main(args: argparse.Namespace, dag: CausalDAG=None):
         args: Object from the argument parser that defines various settings of
             the causal structure and discovery process.
     """
-    # initialize model of the causal structure
-    model, adj_matrix = init_model(args)
-    
-    # initialize optimizers
-    model_optimizer = torch.optim.Adam(model.parameters(), lr=args.lr_model, betas=args.betas_model)   
-    gamma_optimizer = AdamGamma(adj_matrix.gamma, lr=args.lr_gamma, beta1=args.betas_gamma[0], beta2=args.betas_gamma[1])    
-    theta_optimizer = AdamTheta(adj_matrix.theta, lr=args.lr_theta, beta1=args.betas_theta[0], beta2=args.betas_theta[1])
     
     # initialize the environment: create a graph and generate observational 
     # samples from the joint distribution of the graph variables
@@ -48,6 +42,38 @@ def main(args: argparse.Namespace, dag: CausalDAG=None):
                     graph_structure=args.graph_structure,
                     edge_prob=args.edge_prob,
                     dag=dag)
+    
+    # initialize policy learning
+    if args.learn_policy:
+        policy = MLPolicy(args.num_variables).float()
+        policy_optimizer = torch.optim.Adam(policy.parameters(), lr=1e-2)
+        baseline_lst = []
+        
+        for _ in range(args.max_episodes):
+            log_probs, reward = train(args, env, policy)
+            
+            baseline_lst = baseline_lst + [reward]
+            policy_loss = -(reward - mean(baseline_lst)) * log_probs
+            
+            policy_loss.backward()
+            policy_optimizer.step()
+            
+            print(reward)
+            print(mean(baseline_lst))
+            
+    else:
+        train(args, env)
+            
+            
+def train(args, env, policy=None):
+    # initialize model of the causal structure
+    model, adj_matrix = init_model(args)
+    
+    # initialize optimizers
+    model_optimizer = torch.optim.Adam(model.parameters(), lr=args.lr_model, betas=args.betas_model)   
+    gamma_optimizer = AdamGamma(adj_matrix.gamma, lr=args.lr_gamma, beta1=args.betas_gamma[0], beta2=args.betas_gamma[1])    
+    theta_optimizer = AdamTheta(adj_matrix.theta, lr=args.lr_theta, beta1=args.betas_theta[0], beta2=args.betas_theta[1])
+    
     obs_data = env.reset(n_samples=args.n_obs_samples)
     obs_dataloader = DataLoader(obs_data, batch_size=args.obs_batch_size, shuffle=True, drop_last=True)
     int_dists = choose_distribution(args, obs_data)
@@ -58,7 +84,10 @@ def main(args: argparse.Namespace, dag: CausalDAG=None):
     # initialize Logger
     logger = Logger(args)
     logger.before_training(adj_matrix, env.dag)
-
+    
+    #env.render(gamma.detach(), theta.detach())
+    log_probs_sum = 0
+    reward_sum = 0
     
     # causal discovery training loop
     for epoch in track(range(args.epochs), leave=False, desc="Epoch loop"):
@@ -71,15 +100,19 @@ def main(args: argparse.Namespace, dag: CausalDAG=None):
                                         obs_dataloader)    
        
         # graph fitting
-        graph_fitting(args, 
-                      adj_matrix, 
-                      gamma_optimizer, 
-                      theta_optimizer, 
-                      model, 
-                      env,
-                      epoch,
-                      logger,
-                      int_dists)
+        log_probs, reward = graph_fitting(args, 
+                                          adj_matrix, 
+                                          gamma_optimizer, 
+                                          theta_optimizer, 
+                                          model, 
+                                          env,
+                                          epoch,
+                                          logger,
+                                          int_dists,
+                                          policy)
+        
+        log_probs_sum += log_probs
+        reward_sum += reward
         
         # logging
         stop = logger.on_epoch_end(adj_matrix, torch.from_numpy(env.dag.adj_matrix), epoch)
@@ -87,7 +120,8 @@ def main(args: argparse.Namespace, dag: CausalDAG=None):
         # stop early if SHD is 0 for 3 epochs
         if stop:
             break
-
+    
+    return log_probs_sum, reward_sum
 
    
 def init_model(args: argparse.Namespace) -> Tuple[MultivarMLP, AdjacencyMatrix]:
@@ -120,10 +154,6 @@ def init_model(args: argparse.Namespace) -> Tuple[MultivarMLP, AdjacencyMatrix]:
     
     adj_matrix = AdjacencyMatrix(args.num_variables, device)
     return model, adj_matrix
-
-
-
-
     
  
 if __name__ == '__main__':
@@ -138,7 +168,7 @@ if __name__ == '__main__':
     parser.add_argument('--max_categories', default=10, type=int, help='Maximum number of categories of a causal variable')
     parser.add_argument('--n_obs_samples', default=100000, type=int, help='Number of observational samples from the joint distribution of a synthetic graph')
     parser.add_argument('--epochs', default=30, type=int, help='Maximum number of interventions')
-    parser.add_argument('--graph_structure', type=str, nargs='+', default=['jungle'], help='Structure of the true causal graph')
+    parser.add_argument('--graph_structure', type=str, nargs='+', default=['chain'], help='Structure of the true causal graph')
     parser.add_argument('--heuristic', type=str, nargs='+', default=['uniform'], help='Heuristic used for choosing intervention nodes')
     parser.add_argument('--temperature', default=10.0, type=float, help='Temperature used for sampling the intervention variable')
     parser.add_argument('--full_test', default=True, type=bool, help='Full test run for comparison of all heuristics (fixed graphs)')
@@ -164,10 +194,14 @@ if __name__ == '__main__':
     # Graph fitting (interventional data)
     parser.add_argument('--int_batch_size', default=128, type=int, help='Number of samples per intervention')
     parser.add_argument('--int_epochs', default=100, type=int, help='Number of epochs for updating the graph gamma and theta parameters of the graph')
-    parser.add_argument('--int_dist', type=str, nargs='+', default=['inverse-softmax'], help='Categorical distribution used for sampling intervention values')
+    parser.add_argument('--int_dist', type=str, nargs='+', default=['uniform'], help='Categorical distribution used for sampling intervention values')
     parser.add_argument('--lambda_sparse', default=0.004, type=float, help='Threshold for interpreting an edge as beneficial')
     parser.add_argument('--K', default=100, help='Number of graph samples for gradient estimation')
     parser.add_argument('--temp_int', default=[1], type=float, nargs='+', help='Temperature used for distribution of intervention values')
+    
+    # Reinforcement Learning
+    parser.add_argument('--learn_policy', dest='learn_policy', action='store_true')
+    parser.set_defaults(learn_policy=True)
 
     args: argparse.Namespace = parser.parse_args()
 
@@ -205,16 +239,16 @@ if __name__ == '__main__':
                     
                 dags[structure].append(dag)
             
-            for heuristic in args.heuristic:
-                for int_dist in args.int_dist:
-                    if int_dist == 'uniform':
-                        temp_int = [1]
-                    else:
-                        temp_int = args.temp_int
-                    for temperature in temp_int:                           
-                        for i, dag in enumerate(dags[structure]):
-                            args.log_graph_structure = structure + "-dag-" + str(i)  # for logging
-                            args.log_heuristic = heuristic # for logging 
-                            args.log_temp_int = temperature
-                            args.log_int_dist = int_dist
-                            main(args, dag)
+       #     for heuristic in args.heuristic:
+            for int_dist in args.int_dist:
+                if int_dist == 'uniform':
+                    temp_int = [1]
+                else:
+                    temp_int = args.temp_int
+                for temperature in temp_int:                           
+                    for i, dag in enumerate(dags[structure]):
+                        args.log_graph_structure = structure + "-dag-" + str(i)  # for logging
+                        args.log_heuristic = 'policy' # for logging 
+                        args.log_temp_int = temperature
+                        args.log_int_dist = int_dist
+                        main(args, dag)

@@ -51,10 +51,8 @@ class CausalEnv(gym.Env):
         # One action is an intervention on one node (sparse interventions)
         self.action_space = spaces.Discrete(num_vars)
              
-        # Dummy observational space
-        # TODO: Implement observational space for learning a policy, e.g. 
-        # possible values (0-1) in adjacency matrix (box space)
-        self.observation_space = spaces.Discrete(1)
+        # Observational space (edge probabilities of learned adjacency matrix)
+        self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(num_vars,num_vars))
         
         self.visualization = None
         
@@ -76,7 +74,7 @@ class CausalEnv(gym.Env):
         int_data = GraphData(data=torch.from_numpy(int_data)) 
 
         
-        reward = -1 * num_samples # incentivice agent to perform as few interventions as possible
+        reward = -1 # incentivice agent to perform as few interventions as possible
         info = {}
         
         return int_data, reward, info
