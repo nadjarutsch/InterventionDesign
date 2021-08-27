@@ -12,6 +12,7 @@ from typing import Tuple
 from collections import defaultdict
 import json
 from datetime import datetime
+import os
 
 from utils import track
 from causal_graphs.graph_generation import generate_categorical_graph, get_graph_func
@@ -57,8 +58,7 @@ def main(args: argparse.Namespace, dag: CausalDAG=None):
     # initialize Logger
     logger = Logger(args)
     logger.before_training(adj_matrix, env.dag)
-    
-    #env.render(gamma.detach(), theta.detach())
+
     
     # causal discovery training loop
     for epoch in track(range(args.epochs), leave=False, desc="Epoch loop"):
@@ -144,6 +144,9 @@ if __name__ == '__main__':
     parser.add_argument('--full_test', default=True, type=bool, help='Full test run for comparison of all heuristics (fixed graphs)')
     parser.add_argument('--edge_prob', default=0.4, help='Edge likelihood for generating a graph') # only used for "random" graph structure
     parser.add_argument('--num_graphs', default=1, type=int, help='Number of graphs per structure')
+    parser.add_argument('--existing_dags', dest='existing_dags', action='store_true')
+    parser.add_argument('--generate_dags', dest='existing_dags', action='store_false')
+    parser.set_defaults(existing_dags=True)
 
     # Distribution fitting (observational data)
     parser.add_argument('--obs_batch_size', default=128, type=int, help='Batch size used for fitting the graph to observational data')
@@ -176,13 +179,31 @@ if __name__ == '__main__':
             json.dump(argparse_dict, fp)
         for structure in args.graph_structure:
             for i in range(args.num_graphs):
-                dags[structure].append(generate_categorical_graph(num_vars=args.num_variables,
-                                                                  min_categs=args.min_categories,
-                                                                  max_categs=args.max_categories,
-                                                                  connected=True,
-                                                                  graph_func=get_graph_func(structure),
-                                                                  edge_prob=args.edge_prob,
-                                                                  use_nn=True))
+                dag = generate_categorical_graph(num_vars=args.num_variables,
+                                                 min_categs=args.min_categories,
+                                                 max_categs=args.max_categories,
+                                                 connected=True,
+                                                 graph_func=get_graph_func(structure),
+                                                 edge_prob=args.edge_prob,
+                                                 use_nn=True)
+                
+                if args.existing_dags:
+                    for root, dirs, files in os.walk('dags'):
+                        if structure not in root:
+                            continue
+                        if f'dag-{i}' not in root:
+                            continue
+                        for file in files:
+                            if 'dag.pt' in file:
+                                path = os.path.join(root, file)
+                                break
+                        else:
+                            continue
+                        break
+                    
+                    dag = dag.load_from_file(path)
+                    
+                dags[structure].append(dag)
             
             for heuristic in args.heuristic:
                 for int_dist in args.int_dist:
@@ -197,9 +218,3 @@ if __name__ == '__main__':
                             args.log_temp_int = temperature
                             args.log_int_dist = int_dist
                             main(args, dag)
-  
-    
-  
-    # single run 
-  #  else:
-   #     main(args)
