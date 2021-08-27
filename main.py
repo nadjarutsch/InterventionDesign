@@ -58,8 +58,7 @@ def main(args: argparse.Namespace, dag: CausalDAG=None):
     # initialize Logger
     logger = Logger(args)
     logger.before_training(adj_matrix, env.dag)
-    
-    #env.render(gamma.detach(), theta.detach())
+
     
     # causal discovery training loop
     for epoch in track(range(args.epochs), leave=False, desc="Epoch loop"):
@@ -219,5 +218,3 @@ if __name__ == '__main__':
                             args.log_temp_int = temperature
                             args.log_int_dist = int_dist
                             main(args, dag)
-  
-    
