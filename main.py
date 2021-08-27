@@ -14,6 +14,7 @@ from collections import defaultdict
 import json
 from datetime import datetime
 from statistics import mean
+import os
 
 from utils import track
 from causal_graphs.graph_generation import generate_categorical_graph, get_graph_func
@@ -46,6 +47,7 @@ def main(args: argparse.Namespace, dag: CausalDAG=None):
     # initialize policy learning
     if args.learn_policy:
         policy = MLPolicy(args.num_variables).float()
+        policy = policy.to('cuda')
         policy_optimizer = torch.optim.Adam(policy.parameters(), lr=1e-2)
         baseline_lst = []
         
@@ -176,7 +178,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_graphs', default=1, type=int, help='Number of graphs per structure')
     parser.add_argument('--existing_dags', dest='existing_dags', action='store_true')
     parser.add_argument('--generate_dags', dest='existing_dags', action='store_false')
-    parser.set_defaults(existing_dags=True)
+    parser.set_defaults(existing_dags=False)
 
     # Distribution fitting (observational data)
     parser.add_argument('--obs_batch_size', default=128, type=int, help='Batch size used for fitting the graph to observational data')
@@ -200,6 +202,7 @@ if __name__ == '__main__':
     parser.add_argument('--temp_int', default=[1], type=float, nargs='+', help='Temperature used for distribution of intervention values')
     
     # Reinforcement Learning
+    parser.add_argument('--max_episodes', default=100, type=int, help='Maximum number of episodes')
     parser.add_argument('--learn_policy', dest='learn_policy', action='store_true')
     parser.set_defaults(learn_policy=True)
 
