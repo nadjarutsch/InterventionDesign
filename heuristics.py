@@ -50,6 +50,9 @@ def choose_intervention(args: argparse.Namespace,
     
     elif args.log_heuristic == 'num-children':
         return num_children(args, adj_matrix)
+    
+    elif args.log_heuristic == 'uncertain-parents':
+        return uncertain_parents(args, adj_matrix)
 
 @torch.no_grad()
 def uniform(num_variables: int) -> int:
@@ -83,6 +86,17 @@ def uncertain_children(args: argparse.Namespace,
     
     uncertainty = adj_matrix.uncertainty(temperature=args.temperature)    
     int_idx = torch.multinomial(torch.sum(uncertainty, 1), num_samples=1)
+    
+    return int_idx.item()
+
+@torch.no_grad()
+def uncertain_parents(args: argparse.Namespace,
+                      adj_matrix: AdjacencyMatrix) -> int:
+    """More likely to intervene on nodes where the sum of the uncertainty of 
+    incoming edges is high."""
+    
+    uncertainty = adj_matrix.uncertainty(temperature=args.temperature)    
+    int_idx = torch.multinomial(torch.sum(uncertainty, 0), num_samples=1)
     
     return int_idx.item()
 
