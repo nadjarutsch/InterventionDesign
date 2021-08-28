@@ -16,6 +16,7 @@ class MLPolicy(nn.Module):
         
         # add final linear layer
         self.layers.append(nn.Linear(nodes_in[-1], nodes_out[-1]))
+        self.layers.append(nn.Softmax(dim=0))
     
     def forward(self, x):
         for layer in self.layers:     
@@ -24,5 +25,6 @@ class MLPolicy(nn.Module):
     
     def act(self, state):
         probs = self.forward(state.flatten())
+        print(probs)
         action = torch.multinomial(probs, 1)
         return int(action.item()), torch.log(probs[action])
