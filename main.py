@@ -59,7 +59,7 @@ def main(args: argparse.Namespace, dag: CausalDAG=None):
             log_probs, reward = train(args, env, obs_dataloader, policy)
             
             baseline_lst = baseline_lst + [reward]
-            policy_loss = -(reward - baseline_lst[0]) * log_probs
+            policy_loss = -(reward - mean(baseline_lst[-50:])) * log_probs
             
             policy_loss.backward()
             policy_optimizer.step()
