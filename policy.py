@@ -3,14 +3,19 @@ import torch.nn as nn
 
 
 class MLPolicy(nn.Module):
-    def __init__(self, num_variables):
+    def __init__(self, num_variables, n_hidden):
         super().__init__()
         num_variables = int(num_variables)
+        nodes_in = [2 * num_variables * num_variables] + n_hidden
+        nodes_out = n_hidden + [num_variables]
+        
         self.layers = nn.ModuleList()
-        self.layers.append(nn.Linear(num_variables * num_variables, 2 * num_variables)) 
-        self.layers.append(nn.ReLU())
-        self.layers.append(nn.Linear(2 * num_variables, num_variables)) 
-        self.layers.append(nn.Softmax())
+        for inputs, outputs in zip(nodes_in[:-1], nodes_out[:-1]):
+            self.layers.append(nn.Linear(inputs, outputs)) 
+            self.layers.append(nn.PReLU())     
+        
+        # add final linear layer
+        self.layers.append(nn.Linear(nodes_in[-1], nodes_out[-1]))
     
     def forward(self, x):
         for layer in self.layers:     
