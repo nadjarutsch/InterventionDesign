@@ -52,6 +52,7 @@ def main(args: argparse.Namespace, dag: CausalDAG=None):
         baseline_lst = []
         
         for _ in range(args.max_episodes):
+            policy_optimizer.zero_grad()
             log_probs, reward = train(args, env, policy)
             
             baseline_lst = baseline_lst + [reward]
