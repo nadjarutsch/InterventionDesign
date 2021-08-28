@@ -286,7 +286,8 @@ def graph_fitting(args: argparse.Namespace,
         # perform intervention and update parameters based on interventional data
         
         if args.learn_policy:
-            int_idx, log_prob = policy.act(adj_matrix.uncertainty())
+            state = torch.cat((torch.sigmoid(adj_matrix.gamma.detach()), torch.sigmoid(adj_matrix.theta.detach())))
+            int_idx, log_prob = policy.act(state)
         else:
             if epoch == 0 and i == 0: # always start with the same variable
                 int_idx = 0
