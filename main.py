@@ -44,19 +44,22 @@ def main(args: argparse.Namespace, dag: CausalDAG=None):
                     edge_prob=args.edge_prob,
                     dag=dag)
     
+    obs_data = env.reset(n_samples=args.n_obs_samples)
+    obs_dataloader = DataLoader(obs_data, batch_size=args.obs_batch_size, shuffle=True, drop_last=True)
+    
     # initialize policy learning
     if args.learn_policy:
-        policy = MLPolicy(args.num_variables).float()
+        policy = MLPolicy(args.num_variables, [512, 256, 128]).float()
         policy = policy.to('cuda')
-        policy_optimizer = torch.optim.Adam(policy.parameters(), lr=1e-2)
+        policy_optimizer = torch.optim.Adam(policy.parameters(), lr=1e-5)
         baseline_lst = []
         
         for _ in range(args.max_episodes):
             policy_optimizer.zero_grad()
-            log_probs, reward = train(args, env, policy)
+            log_probs, reward = train(args, env, obs_dataloader, policy)
             
             baseline_lst = baseline_lst + [reward]
-            policy_loss = -(reward - mean(baseline_lst)) * log_probs
+            policy_loss = -(reward - baseline_lst[0]) * log_probs
             
             policy_loss.backward()
             policy_optimizer.step()
@@ -68,7 +71,7 @@ def main(args: argparse.Namespace, dag: CausalDAG=None):
         train(args, env)
             
             
-def train(args, env, policy=None):
+def train(args, env, obs_dataloader, policy=None):
     # initialize model of the causal structure
     model, adj_matrix = init_model(args)
     
