@@ -25,6 +25,5 @@ class MLPolicy(nn.Module):
     
     def act(self, state):
         probs = self.forward(state.flatten())
-        print(probs)
         action = torch.multinomial(probs, 1)
         return int(action.item()), torch.log(probs[action])
