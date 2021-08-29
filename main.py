@@ -3,7 +3,7 @@ from metrics import *
 from enco_model import *
 from enco_training import *
 from heuristics import *
-from policy import MLPolicy
+from policy import MLPolicy, GAT
 
 import argparse
 import torch
@@ -49,7 +49,7 @@ def main(args: argparse.Namespace, dag: CausalDAG=None):
     
     # initialize policy learning
     if args.learn_policy:
-        policy = MLPolicy(args.num_variables, [512, 256, 128]).float()
+        policy = GAT(args.num_variables).float()
         policy = policy.to('cuda')
         policy_optimizer = torch.optim.Adam(policy.parameters(), lr=1e-5)
         baseline_lst = []
@@ -206,7 +206,7 @@ if __name__ == '__main__':
     parser.add_argument('--temp_int', default=[1], type=float, nargs='+', help='Temperature used for distribution of intervention values')
     
     # Reinforcement Learning
-    parser.add_argument('--max_episodes', default=100, type=int, help='Maximum number of episodes')
+    parser.add_argument('--max_episodes', default=10000, type=int, help='Maximum number of episodes')
     parser.add_argument('--learn_policy', dest='learn_policy', action='store_true')
     parser.set_defaults(learn_policy=True)
 
