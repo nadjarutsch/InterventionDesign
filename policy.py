@@ -35,7 +35,7 @@ class MLPolicy(nn.Module):
     
     
 class GAT(nn.Module):
-    def __init__(self, num_variables, n_hidden=[], n_heads=1, edge_dim=3):
+    def __init__(self, num_variables, n_hidden=[], n_heads=1, edge_dim=3, device='cuda:0'):
         super().__init__()
         self.num_variables = int(num_variables)
         nodes_in = [self.num_variables] + n_hidden
@@ -54,17 +54,20 @@ class GAT(nn.Module):
         
         # fully connected graph
         graph = nx.complete_graph(num_variables)
-        self.edge_index = torch_geometric.utils.from_networkx(graph).edge_index.to('cuda') 
+        self.edge_index = torch_geometric.utils.from_networkx(graph).edge_index.to(device)
+     #   self.edge_index = edge_index.type(torch.LongTensor)
         
     def forward(self, x, edge_features):
-        for layer in self.layers:     
-            x = layer(self.edge_index.long(), x, edge_features)
+        for layer in self.layers:    
+            print(x.shape, edge_features.shape)
+            x = layer(edge_index=self.edge_index, x=x, edge_attr=edge_features)
         x = self.softmax(x)
         return x
     
     def act(self, state):
-        x = torch.zeros(self.num_variables, device=state[0].device) # no node features
-        edge_features = torch.stack([state[0].flatten(), state[0].T.flatten(), state[1].flatten()], dim=-1)
+        x = torch.ones((1, self.num_variables), device=state[0].device) # no node features
+        edge_features = torch.stack([state[0].flatten()[:600], state[0].T.flatten()[:600], state[1].flatten()[:600]], dim=-1)
+        edge_features = edge_features[None,:,:]
         probs = self.forward(x, edge_features)
         action = torch.multinomial(probs, 1)
         return int(action.item()), torch.log(probs[action])

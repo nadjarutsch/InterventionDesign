@@ -47,16 +47,18 @@ def main(args: argparse.Namespace, dag: CausalDAG=None):
     obs_data = env.reset(n_samples=args.n_obs_samples)
     obs_dataloader = DataLoader(obs_data, batch_size=args.obs_batch_size, shuffle=True, drop_last=True)
     
+    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'    
+    
     # initialize policy learning
     if args.learn_policy:
-        policy = GAT(args.num_variables, n_hidden=[]).float()
-        policy = policy.to('cuda')
+        policy = GAT(args.num_variables, n_hidden=[], device=device)
+        policy = policy.to(device)
         policy_optimizer = torch.optim.Adam(policy.parameters(), lr=1e-5)
         baseline_lst = []
         
         for _ in range(args.max_episodes):
             policy_optimizer.zero_grad()
-            log_probs, reward = train(args, env, obs_dataloader, policy)
+            log_probs, reward = train(args, env, obs_dataloader, device, policy)
             
             baseline_lst = baseline_lst + [reward]
             policy_loss = -(reward - mean(baseline_lst[-50:])) * log_probs
@@ -68,12 +70,12 @@ def main(args: argparse.Namespace, dag: CausalDAG=None):
             print(mean(baseline_lst))
             
     else:
-        train(args, env)
+        train(args, env, obs_dataloader, device)
             
             
-def train(args, env, obs_dataloader, policy=None):
+def train(args, env, obs_dataloader, device, policy=None):
     # initialize model of the causal structure
-    model, adj_matrix = init_model(args)
+    model, adj_matrix = init_model(args, device)
     
     # initialize optimizers
     model_optimizer = torch.optim.Adam(model.parameters(), lr=args.lr_model, betas=args.betas_model)   
@@ -130,7 +132,7 @@ def train(args, env, obs_dataloader, policy=None):
     return log_probs_sum, reward_sum
 
    
-def init_model(args: argparse.Namespace) -> Tuple[MultivarMLP, AdjacencyMatrix]:
+def init_model(args: argparse.Namespace, device) -> Tuple[MultivarMLP, AdjacencyMatrix]:
     """Initializes a complete model of the causal structure, consisting of a 
     multivariable MLP which models the conditional distributions of the causal 
     variables, and gamma and theta values which define the adjacency matrix 
@@ -152,11 +154,11 @@ def init_model(args: argparse.Namespace) -> Tuple[MultivarMLP, AdjacencyMatrix]:
     
     
     if args.data_parallel:
-            device = torch.device("cuda:0")
-            print("Data parallel activated. Using %i GPUs" % torch.cuda.device_count())
-            model = nn.DataParallel(model)
-    else:
-        device = torch.device("cpu")
+        #    device = torch.device("cuda:0")
+        print("Data parallel activated. Using %i GPUs" % torch.cuda.device_count())
+        model = nn.DataParallel(model)
+ #   else:
+       # device = torch.device("cpu")
     
     adj_matrix = AdjacencyMatrix(args.num_variables, device)
     return model, adj_matrix
