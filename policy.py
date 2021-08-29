@@ -54,7 +54,8 @@ class GAT(nn.Module):
         
         # fully connected graph
         graph = nx.complete_graph(num_variables)
-        self.edge_index = torch_geometric.utils.from_networkx(graph).edge_index.to('cuda') 
+        self.edge_index = torch_geometric.utils.from_networkx(graph).edge_index.long().to('cuda') 
+        print(self.edge_index)
         
     def forward(self, x, edge_features):
         for layer in self.layers:     
