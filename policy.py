@@ -54,12 +54,11 @@ class GAT(nn.Module):
         
         # fully connected graph
         graph = nx.complete_graph(num_variables)
-        self.edge_index = torch_geometric.utils.from_networkx(graph).edge_index.long().to('cuda') 
-        print(self.edge_index)
+        self.edge_index = torch_geometric.utils.from_networkx(graph).edge_index.to('cuda') 
         
     def forward(self, x, edge_features):
         for layer in self.layers:     
-            x = layer(self.edge_index, x, edge_features)
+            x = layer(self.edge_index.long(), x, edge_features)
         x = self.softmax(x)
         return x
     
