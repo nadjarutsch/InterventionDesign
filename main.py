@@ -49,7 +49,7 @@ def main(args: argparse.Namespace, dag: CausalDAG=None):
     
     # initialize policy learning
     if args.learn_policy:
-        policy = GAT(args.num_variables).float()
+        policy = GAT(args.num_variables, n_hidden=[]).float()
         policy = policy.to('cuda')
         policy_optimizer = torch.optim.Adam(policy.parameters(), lr=1e-5)
         baseline_lst = []
