@@ -1,5 +1,8 @@
 import torch
 import torch.nn as nn
+import torch_geometric
+import torch_geometric.nn as geom_nn
+import networkx as nx
 
 
 class MLPolicy(nn.Module):
@@ -24,6 +27,44 @@ class MLPolicy(nn.Module):
         return x
     
     def act(self, state):
-        probs = self.forward(state.flatten())
+        x = torch.cat((state[0], state[1]), dim=-1)
+        probs = self.forward(x)
         action = torch.multinomial(probs, 1)
         return int(action.item()), torch.log(probs[action])
+    
+    
+class GAT(nn.Module):
+    def __init__(self, num_variables, n_hidden=[], num_layers=2, n_heads=1, edge_dim=3):
+        super().__init__()
+        self.num_variables = int(num_variables)
+        nodes_in = [self.num_variables] + n_hidden
+        nodes_out = n_hidden + [self.num_variables]
+        
+        self.layers = nn.ModuleList()
+        for inputs, outputs in zip(nodes_in[:-1], nodes_out[:-1]):
+            pass
+        
+        self.layers.append(geom_nn.TransformerConv(nodes_in[-1], 
+                                                   nodes_out[-1], 
+                                                   heads=n_heads, 
+                                                   concat=False, 
+                                                   edge_dim=3))
+        self.softmax = nn.Softmax(dim=0)
+        
+        # fully connected graph
+        graph = nx.complete_graph(num_variables)
+        self.edge_index = torch_geometric.utils.from_networkx(graph).edge_index 
+        
+    def forward(self, x, edge_features):
+        for layer in self.layers:     
+            x = layer(x, self.edge_index, edge_features)
+        x = self.softmax(x)
+        return x
+    
+    def act(self, state):
+        x = torch.zeros(self.num_variables) # no node features
+        edge_features = torch.stack([state[0], state[0].T, state[1]], dim=-1)
+        probs = self.forward(x, edge_features)
+        action = torch.multinomial(probs, 1)
+        return int(action.item()), torch.log(probs[action])
+    
