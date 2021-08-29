@@ -63,7 +63,7 @@ class GAT(nn.Module):
         return x
     
     def act(self, state):
-        x = torch.zeros(self.num_variables) # no node features
+        x = torch.zeros(self.num_variables, device=state[0].device) # no node features
         edge_features = torch.stack([state[0].flatten(), state[0].T.flatten(), state[1].flatten()], dim=-1)
         probs = self.forward(x, edge_features)
         action = torch.multinomial(probs, 1)
