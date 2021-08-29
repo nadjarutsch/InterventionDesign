@@ -34,7 +34,7 @@ class MLPolicy(nn.Module):
     
     
 class GAT(nn.Module):
-    def __init__(self, num_variables, n_hidden=[], num_layers=2, n_heads=1, edge_dim=3):
+    def __init__(self, num_variables, n_hidden=[], n_heads=1, edge_dim=3):
         super().__init__()
         self.num_variables = int(num_variables)
         nodes_in = [self.num_variables] + n_hidden
