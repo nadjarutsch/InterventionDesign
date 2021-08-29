@@ -31,6 +31,7 @@ class MLPolicy(nn.Module):
         probs = self.forward(x)
         action = torch.multinomial(probs, 1)
         return int(action.item()), torch.log(probs[action])
+   
     
     
 class GAT(nn.Module):
