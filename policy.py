@@ -58,7 +58,7 @@ class GAT(nn.Module):
         
     def forward(self, x, edge_features):
         for layer in self.layers:     
-            x = layer(x, self.edge_index, edge_features)
+            x = layer(self.edge_index, x, edge_features)
         x = self.softmax(x)
         return x
     
