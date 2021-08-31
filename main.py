@@ -51,7 +51,7 @@ def main(args: argparse.Namespace, dag: CausalDAG=None):
     
     # initialize policy learning
     if args.learn_policy:
-        policy = GAT(args.num_variables, n_hidden=[], device=device)
+        policy = MLPolicy(args.num_variables, n_hidden=[])
         policy = policy.to(device)
         policy_optimizer = torch.optim.Adam(policy.parameters(), lr=1e-5)
         baseline_lst = []
@@ -68,6 +68,10 @@ def main(args: argparse.Namespace, dag: CausalDAG=None):
             
             print(reward)
             print(mean(baseline_lst))
+                  
+            if reward >= max(baseline_lst):
+                print('\nSaving policy...')
+                torch.save(policy.state_dict(), 'policy.txt')
             
     else:
         train(args, env, obs_dataloader, device)
@@ -208,7 +212,7 @@ if __name__ == '__main__':
     parser.add_argument('--temp_int', default=[1], type=float, nargs='+', help='Temperature used for distribution of intervention values')
     
     # Reinforcement Learning
-    parser.add_argument('--max_episodes', default=10000, type=int, help='Maximum number of episodes')
+    parser.add_argument('--max_episodes', default=2, type=int, help='Maximum number of episodes')
     parser.add_argument('--learn_policy', dest='learn_policy', action='store_true')
     parser.set_defaults(learn_policy=True)
 
