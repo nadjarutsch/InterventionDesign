@@ -27,7 +27,7 @@ class MLPolicy(nn.Module):
         return x
     
     def act(self, state):
-        x = torch.cat((state[0], state[1]), dim=-1)
+        x = torch.cat((state[0].flatten(), state[1].flatten()), dim=-1)
         probs = self.forward(x)
         action = torch.multinomial(probs, 1)
         return int(action.item()), torch.log(probs[action])
