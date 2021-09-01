@@ -51,7 +51,7 @@ def main(args: argparse.Namespace, dag: CausalDAG=None):
     
     # initialize policy learning
     if args.learn_policy:
-        policy = MLP(args.num_variables, n_hidden=[25, 25, 25])
+        policy = GAT(args.num_variables)
         policy = policy.to(device)
         policy_optimizer = torch.optim.Adam(policy.parameters(), lr=1e-5)
         baseline_lst = []
@@ -71,7 +71,7 @@ def main(args: argparse.Namespace, dag: CausalDAG=None):
                   
             if reward >= max(baseline_lst):
                 print('\nSaving policy...')
-                torch.save(policy.state_dict(), 'policy_mlp.txt')
+                torch.save(policy.state_dict(), 'policy_gat.pth')
             
     else:
         train(args, env, obs_dataloader, device)
@@ -261,7 +261,7 @@ if __name__ == '__main__':
                 for temperature in temp_int:                           
                     for i, dag in enumerate(dags[structure]):
                         args.log_graph_structure = structure + "-dag-" + str(i)  # for logging
-                        args.log_heuristic = 'mlp-policy' # for logging 
+                        args.log_heuristic = 'gat-policy' # for logging 
                         args.log_temp_int = temperature
                         args.log_int_dist = int_dist
                         main(args, dag)
