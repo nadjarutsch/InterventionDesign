@@ -3,7 +3,7 @@ from env import CausalEnv
 from heuristics import choose_intervention
 from utils import track
 from metrics import *
-from policy import MLPolicy
+from policy import MLP, GAT
 
 import argparse 
 import torch
@@ -261,7 +261,7 @@ def graph_fitting(args: argparse.Namespace,
                   epoch: int,
                   logger: Logger,
                   int_dists: defaultdict,
-                  policy: MLPolicy):
+                  policy: MLP or GAT):
     """Fit the adjacency matrix to interventional data, given the learned 
     multivariable MLP.
     
