@@ -25,7 +25,7 @@ class MLP(nn.Module):
     def forward(self, x):
         for layer in self.layers:     
             x = layer(x)
-        return x
+        return x.squeeze()
     
     def act(self, state):
         x = torch.cat((state[0].flatten(), state[1].flatten()), dim=-1)
@@ -39,8 +39,6 @@ class GAT(nn.Module):
     def __init__(self, num_variables, c_hidden=[9, 9, 9], n_heads=3, edge_dim=3, device='cuda:0'):
         super().__init__()
         self.num_variables = int(num_variables)
-      #  nodes_in = c_hidden
-       # nodes_out = c_hidden[1:] + [self.num_variables]
         
         self.layers = nn.ModuleList()
 
@@ -54,31 +52,26 @@ class GAT(nn.Module):
         self.layers.append(GATLayer(c_in=c_hidden[-1], c_out=1, edge_dim=edge_dim, num_heads=n_heads, concat_heads=False))
         self.softmax = nn.Softmax(dim=0)
         
-        # fully connected graph
- #       graph = nx.complete_graph(num_variables)
-  #      self.edge_index = torch_geometric.utils.from_networkx(graph).edge_index.to(device)
-     #   self.edge_index = edge_index.type(torch.LongTensor)
         adj_matrix = torch.ones((num_variables, num_variables), device=device)
         self.adj_matrix = adj_matrix[None,:,:]
         
     def forward(self, node_feats, edge_feats, adj_matrix):
         for layer in self.layers:    
-          #  print(node_feats.shape, edge_feats.shape)
+
             if isinstance(layer, GATLayer):
                 node_feats = layer(node_feats, edge_feats, adj_matrix=adj_matrix)
             else:
                 node_feats = layer(node_feats)
-        node_feats = self.softmax(node_feats)
+
+        node_feats = self.softmax(node_feats.squeeze())
         return node_feats
     
     def act(self, state):
-   #     node_feats = torch.zeros((1, self.num_variables), device=state[0].device) # no node features
         node_feats = None
         edge_feats = torch.stack([state[0], state[0].T, state[1]], dim=-1)
         edge_feats = edge_feats[None,:,:] # TODO: implement for batch_size > 1
         adj_matrix = self.adj_matrix
         probs = self.forward(node_feats, edge_feats, adj_matrix).squeeze() # TODO: support batch_size > 1
-   #     print(probs.shape, probs)
         action = torch.multinomial(probs, 1)
         return int(action.item()), torch.log(probs[action])
     
