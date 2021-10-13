@@ -187,7 +187,7 @@ if __name__ == '__main__':
     parser.add_argument('--min_categories', default=10, type=int, help='Minimum number of categories of a causal variable')
     parser.add_argument('--max_categories', default=10, type=int, help='Maximum number of categories of a causal variable')
     parser.add_argument('--n_obs_samples', default=100000, type=int, help='Number of observational samples from the joint distribution of a synthetic graph')
-    parser.add_argument('--epochs', default=3, type=int, help='Maximum number of interventions')
+    parser.add_argument('--epochs', default=30, type=int, help='Maximum number of interventions')
     parser.add_argument('--graph_structure', type=str, nargs='+', default=['chain'], help='Structure of the true causal graph')
     parser.add_argument('--heuristic', type=str, nargs='+', default=['uniform'], help='Heuristic used for choosing intervention nodes')
     parser.add_argument('--temperature', default=10.0, type=float, help='Temperature used for sampling the intervention variable')
