@@ -25,18 +25,19 @@ class MLP(nn.Module):
     def forward(self, x):
         for layer in self.layers:     
             x = layer(x)
-        return x.squeeze()
+     #   return x.squeeze()
+        return x
     
     def act(self, state):
-        x = torch.cat((state[0].flatten(), state[1].flatten()), dim=-1)
-        probs = self.forward(x)
+       # x = torch.cat((state[0].flatten(), state[1].flatten()), dim=-1)
+        probs = self.forward(state.flatten())
         action = torch.multinomial(probs, 1)
         return int(action.item()), torch.log(probs[action])
    
     
     
 class GAT(nn.Module):
-    def __init__(self, num_variables, c_hidden=[9, 9, 9], n_heads=3, edge_dim=3, device='cuda:0'):
+    def __init__(self, num_variables, c_hidden=[9, 9, 9], n_heads=625, edge_dim=3, device='cuda:0'):
         super().__init__()
         self.num_variables = int(num_variables)
         

@@ -26,7 +26,7 @@ from causal_graphs.graph_definition import CausalDAG
 
 
     
-def main(args: argparse.Namespace, dag: CausalDAG=None):
+def main(args: argparse.Namespace, dag: CausalDAG=None, policy=None):
     """Executes a causal discovery algorithm on synthetic data from a sampled
     DAG, using a specified heuristic for choosing intervention variables.
     
@@ -51,30 +51,32 @@ def main(args: argparse.Namespace, dag: CausalDAG=None):
     
     # initialize policy learning
     if args.learn_policy:
-        policy = GAT(args.num_variables)
+        policy = MLP(args.num_variables, [512, 256, 128]).float()
         policy = policy.to(device)
-        policy_optimizer = torch.optim.Adam(policy.parameters(), lr=1e-5)
+        policy_optimizer = torch.optim.Adam(policy.parameters(), lr=1e-4)
         baseline_lst = []
         
         for _ in range(args.max_episodes):
             policy_optimizer.zero_grad()
             log_probs, reward = train(args, env, obs_dataloader, device, policy)
             
-            baseline_lst = baseline_lst + [reward]
-            policy_loss = -(reward - mean(baseline_lst[-50:])) * log_probs
+            reward += [0] * (args.epochs - len(reward))
+            baseline_lst.append(reward)
+            baseline = torch.Tensor(baseline_lst)
+            policy_loss = -torch.sum((torch.Tensor(reward[:len(log_probs)]) - torch.mean(baseline, dim=0)[:len(log_probs)]) * torch.cumsum(torch.tensor(log_probs, requires_grad=True), dim=0))
             
             policy_loss.backward()
             policy_optimizer.step()
             
-            print(reward)
-            print(mean(baseline_lst))
-                  
-            if reward >= max(baseline_lst):
+            print(torch.sum(torch.Tensor(reward)))
+            print(torch.mean(torch.sum(baseline, dim=-1)))
+            
+            if torch.sum(torch.Tensor(reward)) >= max(torch.sum(baseline, dim=-1)):
                 print('\nSaving policy...')
-                torch.save(policy.state_dict(), 'policy_gat.pth')
+                torch.save(policy.state_dict(), 'policy_mlp.pth')
             
     else:
-        train(args, env, obs_dataloader, device)
+        train(args, env, obs_dataloader, device, policy)
             
             
 def train(args, env, obs_dataloader, device, policy=None):
@@ -97,9 +99,10 @@ def train(args, env, obs_dataloader, device, policy=None):
     logger = Logger(args)
     logger.before_training(adj_matrix, env.dag)
     
-    #env.render(gamma.detach(), theta.detach())
-    log_probs_sum = 0
-    reward_sum = 0
+    log_probs_lst = []
+    reward_lst = []
+    
+    distance = torch.sum(torch.abs(torch.from_numpy(env.dag.adj_matrix).float().to(device) - adj_matrix.edge_probs()))
     
     # causal discovery training loop
     for epoch in track(range(args.epochs), leave=False, desc="Epoch loop"):
@@ -123,8 +126,12 @@ def train(args, env, obs_dataloader, device, policy=None):
                                           int_dists,
                                           policy)
         
-        log_probs_sum += log_probs
-        reward_sum += reward
+        distance_new = torch.sum(torch.abs(torch.from_numpy(env.dag.adj_matrix).float().to(device) - adj_matrix.edge_probs()))
+        
+        reward, distance = reward / 10. + (distance - distance_new), distance_new
+        
+        log_probs_lst.append(log_probs)
+        reward_lst.append(reward.detach().item())
         
         # logging
         stop = logger.on_epoch_end(adj_matrix, torch.from_numpy(env.dag.adj_matrix), epoch)
@@ -133,7 +140,7 @@ def train(args, env, obs_dataloader, device, policy=None):
         if stop:
             break
     
-    return log_probs_sum, reward_sum
+    return log_probs_lst, reward_lst
 
    
 def init_model(args: argparse.Namespace, device) -> Tuple[MultivarMLP, AdjacencyMatrix]:
@@ -158,11 +165,11 @@ def init_model(args: argparse.Namespace, device) -> Tuple[MultivarMLP, Adjacency
     
     
     if args.data_parallel:
-        #    device = torch.device("cuda:0")
+        device = torch.device("cuda:0")
         print("Data parallel activated. Using %i GPUs" % torch.cuda.device_count())
         model = nn.DataParallel(model)
- #   else:
-       # device = torch.device("cpu")
+    else:
+        device = torch.device("cpu")
     
     adj_matrix = AdjacencyMatrix(args.num_variables, device)
     return model, adj_matrix
@@ -261,7 +268,7 @@ if __name__ == '__main__':
                 for temperature in temp_int:                           
                     for i, dag in enumerate(dags[structure]):
                         args.log_graph_structure = structure + "-dag-" + str(i)  # for logging
-                        args.log_heuristic = 'gat-policy' # for logging 
+                        args.log_heuristic = 'mlp-policy' # for logging 
                         args.log_temp_int = temperature
                         args.log_int_dist = int_dist
                         main(args, dag)

@@ -50,6 +50,9 @@ def choose_intervention(args: argparse.Namespace,
     
     elif args.log_heuristic == 'num-children':
         return num_children(args, adj_matrix)
+    
+    elif args.log_heuristic == 'influence':
+        return influence(args, adj_matrix)
 
 @torch.no_grad()
 def uniform(num_variables: int) -> int:
@@ -107,6 +110,24 @@ def uncertain_neighbours(args: argparse.Namespace,
     outgoing = torch.sum(uncertainty,1)
 
     int_idx = torch.multinomial(incoming + outgoing, num_samples=1)
+    
+    return int_idx.item()
+
+
+@torch.no_grad()
+def influence(args: argparse.Namespace,
+              adj_matrix: AdjacencyMatrix) -> int:
+    """More likely to intervene on nodes with the most descendants."""
+    
+    edge_probs = adj_matrix.edge_probs()
+    num_children = torch.sum(edge_probs, 1).to(dtype=float) 
+    descendants = num_children
+    for i in range(args.num_variables - 2):
+        descendants += torch.einsum('ab,b->ab', edge_probs, num_children)
+        edge_probs = torch.einsum('ab,ba->ab', edge_probs, edge_probs)
+    
+    print(descendants)
+    int_idx = torch.multinomial(descendants, num_samples=1)
     
     return int_idx.item()
 
