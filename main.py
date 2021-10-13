@@ -54,24 +54,25 @@ def main(args: argparse.Namespace, dag: CausalDAG=None, policy=None):
         policy = MLP(args.num_variables, [512, 256, 128]).float()
         policy = policy.to(device)
         policy_optimizer = torch.optim.Adam(policy.parameters(), lr=1e-4)
-        baseline_lst = []
+        rewards_lst = []
         
-        for _ in range(args.max_episodes):
+        for t in range(args.max_episodes):
             policy_optimizer.zero_grad()
             log_probs, reward = train(args, env, obs_dataloader, device, policy)
             
             reward += [0] * (args.epochs - len(reward))
-            baseline_lst.append(reward)
-            baseline = torch.Tensor(baseline_lst)
-            policy_loss = -torch.sum((torch.Tensor(reward[:len(log_probs)]) - torch.mean(baseline, dim=0)[:len(log_probs)]) * torch.cumsum(torch.tensor(log_probs, requires_grad=True), dim=0))
+            rewards_lst.append(reward)
+            baseline = args.beta_baseline * torch.Tensor(reward) + (1 - args.beta_baseline) *  baseline if t != 0 else torch.Tensor(reward)
+
+            policy_loss = -torch.sum((torch.Tensor(reward[:len(log_probs)]) - baseline[:len(log_probs)]) * torch.cumsum(torch.tensor(log_probs, requires_grad=True), dim=0))
             
             policy_loss.backward()
             policy_optimizer.step()
             
             print(torch.sum(torch.Tensor(reward)))
-            print(torch.mean(torch.sum(baseline, dim=-1)))
+            print(torch.mean(torch.sum(torch.tensor(rewards_lst), dim=-1)))
             
-            if torch.sum(torch.Tensor(reward)) >= max(torch.sum(baseline, dim=-1)):
+            if torch.sum(torch.Tensor(reward)) >= max(torch.sum(torch.tensor(rewards_lst), dim=-1)):
                 print('\nSaving policy...')
                 torch.save(policy.state_dict(), 'policy_mlp.pth')
             
@@ -186,7 +187,7 @@ if __name__ == '__main__':
     parser.add_argument('--min_categories', default=10, type=int, help='Minimum number of categories of a causal variable')
     parser.add_argument('--max_categories', default=10, type=int, help='Maximum number of categories of a causal variable')
     parser.add_argument('--n_obs_samples', default=100000, type=int, help='Number of observational samples from the joint distribution of a synthetic graph')
-    parser.add_argument('--epochs', default=30, type=int, help='Maximum number of interventions')
+    parser.add_argument('--epochs', default=3, type=int, help='Maximum number of interventions')
     parser.add_argument('--graph_structure', type=str, nargs='+', default=['chain'], help='Structure of the true causal graph')
     parser.add_argument('--heuristic', type=str, nargs='+', default=['uniform'], help='Heuristic used for choosing intervention nodes')
     parser.add_argument('--temperature', default=10.0, type=float, help='Temperature used for sampling the intervention variable')
@@ -221,6 +222,7 @@ if __name__ == '__main__':
     # Reinforcement Learning
     parser.add_argument('--max_episodes', default=10000, type=int, help='Maximum number of episodes')
     parser.add_argument('--learn_policy', dest='learn_policy', action='store_true')
+    parser.add_argument('--beta_baseline', default=0.5, type=float, help='Beta used for exponentialy weighted baseline average')
     parser.set_defaults(learn_policy=True)
 
     args: argparse.Namespace = parser.parse_args()
